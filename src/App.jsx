@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-const JSONBIN_KEY = "$2a$10$TmXqXV7I9aLrPTXWXBTd5..HQ.9J4wA6mzEvhbHdp7H1hV/lZOwma";
-const JSONBIN_URL = "https://api.jsonbin.io/v3/b";
-
 const GOOGLE_FONTS = `@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');`;
 
 const styles = `
@@ -114,38 +111,24 @@ function formatDate(dateStr) {
   return `${parseInt(d)} de ${months[parseInt(m)-1]} ${y}`;
 }
 
-// ── JSONBIN HELPERS ──
-async function createBin(data) {
-  const res = await fetch(JSONBIN_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Master-Key": JSONBIN_KEY,
-      "X-Bin-Private": "false"
-    },
-    body: JSON.stringify(data)
-  });
-  const json = await res.json();
-  return json.metadata.id;
+function getDb() { return window.db; }
+
+async function saveEvent(id, data) {
+  const db = getDb();
+  if (!db) throw new Error("Firebase no disponible");
+  await db.collection("events").doc(id).set(data);
 }
 
-async function readBin(binId) {
-  const res = await fetch(`${JSONBIN_URL}/${binId}/latest`, {
-    headers: { "X-Master-Key": JSONBIN_KEY }
-  });
-  const json = await res.json();
-  return json.record;
-}
-
-async function updateBin(binId, data) {
-  await fetch(`${JSONBIN_URL}/${binId}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Master-Key": JSONBIN_KEY
-    },
-    body: JSON.stringify(data)
-  });
+async function addAttendee(id, attendee) {
+  const db = getDb();
+  if (!db) throw new Error("Firebase no disponible");
+  const ref = db.collection("events").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const current = snap.data().attendees || [];
+  const confirmed = current.filter(a => a.status === "confirmed");
+  if (attendee.status === "confirmed" && confirmed.length >= 4) return;
+  await ref.update({ attendees: [...current, attendee] });
 }
 
 // ── LOCATION AUTOCOMPLETE ──
@@ -235,25 +218,21 @@ function CreatorView({ onCreate }) {
   async function handleCreate() {
     setLoading(true);
     try {
+      const id = genId();
       const attendees = includeOrganizer && organizerName.trim()
         ? [{ name: organizerName.trim(), isOrganizer: true, status: "confirmed", at: Date.now() }]
         : [];
       const data = {
-        title: form.title.trim(),
-        description: form.description,
-        date: form.date,
-        timeStart: form.timeStart,
-        timeEnd: form.timeEnd,
-        location: form.location.trim(),
-        placeId: form.placeId || null,
-        createdAt: Date.now(),
-        attendees
+        id, title: form.title.trim(), description: form.description,
+        date: form.date, timeStart: form.timeStart, timeEnd: form.timeEnd,
+        location: form.location.trim(), placeId: form.placeId || null,
+        createdAt: Date.now(), attendees
       };
-      const binId = await createBin(data);
-      onCreate(binId);
+      await saveEvent(id, data);
+      onCreate(id);
     } catch(e) {
       console.error(e);
-      alert("Error al crear el evento. Intentá de nuevo.");
+      alert("Error al crear el evento: " + e.message);
     }
     setLoading(false);
   }
@@ -349,43 +328,28 @@ function EventView({ eventId }) {
   const [confirming, setConfirming] = useState(false);
   const MAX_PLAYERS = 4;
 
-  const load = useCallback(async () => {
-    try {
-      const data = await readBin(eventId);
-      setEvent(data);
-      setAttendees(data.attendees || []);
-    } catch(e) {
-      console.error(e);
-    }
-    setLoading(false);
-  }, [eventId]);
-
   useEffect(() => {
-    load();
-    const interval = setInterval(load, 5000);
-    return () => clearInterval(interval);
-  }, [load]);
+    const db = getDb();
+    if (!db) { setLoading(false); return; }
+    const unsub = db.collection("events").doc(eventId).onSnapshot(snap => {
+      if (snap.exists) {
+        const data = snap.data();
+        setEvent(data);
+        setAttendees(data.attendees || []);
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [eventId]);
 
   async function respond(status) {
     if (!name.trim() || confirming) return;
     setConfirming(true);
     try {
-      const data = await readBin(eventId);
-      const current = data.attendees || [];
-      const confirmed = current.filter(a => a.status === "confirmed");
-      if (status === "confirmed" && confirmed.length >= MAX_PLAYERS) {
-        setAttendees(current);
-        setConfirming(false);
-        return;
-      }
-      const updated = [...current, { name: name.trim(), isOrganizer: false, status, at: Date.now() }];
-      await updateBin(eventId, { ...data, attendees: updated });
-      setAttendees(updated);
+      await addAttendee(eventId, { name: name.trim(), isOrganizer: false, status, at: Date.now() });
       setMyName(name.trim());
       setMyResponse(status);
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) { console.error(e); }
     setConfirming(false);
   }
 
@@ -439,7 +403,7 @@ function EventView({ eventId }) {
             {declined.map((p, i) => <div className="declined-item" key={i}>❌ {p.name}</div>)}
           </div>
         )}
-        <div className="refreshing">• se actualiza automáticamente</div>
+        <div className="refreshing">• se actualiza en tiempo real</div>
       </div>
       <div className="rsvp-section">
         <div className="rsvp-title">¿ESTÁS PARA JUGAR?</div>
