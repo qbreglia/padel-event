@@ -1,4 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA0a6c5zpyjnZuZqRsg6-g75HskS2hpbBo",
+  authDomain: "padel-event-54231.firebaseapp.com",
+  projectId: "padel-event-54231",
+  storageBucket: "padel-event-54231.firebasestorage.app",
+  messagingSenderId: "495117525323",
+  appId: "1:495117525323:web:0446c9058088a4a5c608ce"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
 
 const GOOGLE_FONTS = `@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');`;
 
@@ -101,10 +115,6 @@ const styles = `
   .back-btn:hover { color: #f0f0f0; }
 `;
 
-const LS_PREFIX = "padel_";
-const eventKey = (id) => `${LS_PREFIX}event_${id}`;
-const attendeesKey = (id) => `${LS_PREFIX}attendees_${id}`;
-
 function genId() { return Math.random().toString(36).slice(2, 9); }
 function mapsLink(placeId, location) {
   if (placeId) return `https://www.google.com/maps/place/?q=place_id:${placeId}`;
@@ -116,21 +126,19 @@ function formatDate(dateStr) {
   const months = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   return `${parseInt(d)} de ${months[parseInt(m)-1]} ${y}`;
 }
-function saveEvent(id, event, attendees) {
-  try {
-    localStorage.setItem(eventKey(id), JSON.stringify(event));
-    localStorage.setItem(attendeesKey(id), JSON.stringify(attendees));
-  } catch(e) {}
+
+// ── FIREBASE HELPERS ──
+async function saveEvent(id, event, attendees) {
+  await setDoc(doc(db, "events", id), { ...event, attendees });
 }
-function loadEvent(id) {
-  try {
-    const e = localStorage.getItem(eventKey(id));
-    const a = localStorage.getItem(attendeesKey(id));
-    return { event: e ? JSON.parse(e) : null, attendees: a ? JSON.parse(a) : [] };
-  } catch(e) { return { event: null, attendees: [] }; }
-}
-function saveAttendees(id, attendees) {
-  try { localStorage.setItem(attendeesKey(id), JSON.stringify(attendees)); } catch(e) {}
+async function addAttendee(id, attendee) {
+  const ref = doc(db, "events", id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const current = snap.data().attendees || [];
+  const confirmed = current.filter(a => a.status === "confirmed");
+  if (attendee.status === "confirmed" && confirmed.length >= 4) return;
+  await updateDoc(ref, { attendees: [...current, attendee] });
 }
 
 // ── LOCATION AUTOCOMPLETE ──
@@ -160,9 +168,7 @@ function LocationField({ value, onChange }) {
           if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
             setSuggestions(predictions.slice(0, 5));
             setShowDropdown(true);
-          } else {
-            setSuggestions([]);
-          }
+          } else { setSuggestions([]); }
         }
       );
     }, 300);
@@ -177,15 +183,9 @@ function LocationField({ value, onChange }) {
 
   return (
     <div className="location-wrapper">
-      <input
-        className="field"
-        placeholder="Ej: Club Escobar, Benavidez..."
-        value={value}
-        onChange={handleInput}
-        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-        onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
-        autoComplete="off"
-      />
+      <input className="field" placeholder="Ej: Club Escobar, Benavidez..." value={value}
+        onChange={handleInput} onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+        onFocus={() => suggestions.length > 0 && setShowDropdown(true)} autoComplete="off" />
       {showDropdown && suggestions.length > 0 && (
         <div className="autocomplete-dropdown">
           {suggestions.map((s) => (
@@ -225,12 +225,12 @@ function CreatorView({ onCreate }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const canCreate = !!(form.title.trim() && form.date && form.timeStart && form.location.trim() && (!includeOrganizer || organizerName.trim()));
 
-  function handleCreate() {
+  async function handleCreate() {
     setLoading(true);
     const id = genId();
-    const event = { id, title: form.title.trim(), description: form.description, date: form.date, timeStart: form.timeStart, timeEnd: form.timeEnd, location: form.location.trim(), placeId: form.placeId, createdAt: Date.now() };
+    const event = { id, title: form.title.trim(), description: form.description, date: form.date, timeStart: form.timeStart, timeEnd: form.timeEnd, location: form.location.trim(), placeId: form.placeId || null, createdAt: Date.now() };
     const attendees = includeOrganizer && organizerName.trim() ? [{ name: organizerName.trim(), isOrganizer: true, status: "confirmed", at: Date.now() }] : [];
-    saveEvent(id, event, attendees);
+    await saveEvent(id, event, attendees);
     onCreate(id);
     setLoading(false);
   }
@@ -263,10 +263,7 @@ function CreatorView({ onCreate }) {
       <div className="section">
         <div className="section-label">Lugar</div>
         {mapsReady ? (
-          <LocationField
-            value={form.location}
-            onChange={(loc, pid) => setForm(f => ({ ...f, location: loc, placeId: pid }))}
-          />
+          <LocationField value={form.location} onChange={(loc, pid) => setForm(f => ({ ...f, location: loc, placeId: pid }))} />
         ) : (
           <>
             <input className="field" placeholder="Ej: Club Escobar, Benavidez..." value={form.location} onChange={e => set("location", e.target.value)} />
@@ -319,7 +316,7 @@ function ShareView({ eventId, onViewEvent }) {
 }
 
 // ── EVENT VIEW ──
-function EventView({ eventId, onBack }) {
+function EventView({ eventId }) {
   const [event, setEvent] = useState(null);
   const [attendees, setAttendees] = useState([]);
   const [name, setName] = useState("");
@@ -329,28 +326,22 @@ function EventView({ eventId, onBack }) {
   const [confirming, setConfirming] = useState(false);
   const MAX_PLAYERS = 4;
 
-  const load = useCallback(() => {
-    const { event: e, attendees: a } = loadEvent(eventId);
-    if (e) setEvent(e);
-    setAttendees(a);
-    setLoading(false);
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "events", eventId), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setEvent(data);
+        setAttendees(data.attendees || []);
+      }
+      setLoading(false);
+    });
+    return () => unsub();
   }, [eventId]);
 
-  useEffect(() => {
-    load();
-    const interval = setInterval(load, 4000);
-    return () => clearInterval(interval);
-  }, [load]);
-
   async function respond(status) {
-    if (!name.trim()) return;
-    const current = loadEvent(eventId).attendees;
-    const currentConfirmed = current.filter(a => a.status === "confirmed");
-    if (status === "confirmed" && currentConfirmed.length >= MAX_PLAYERS) { setAttendees(current); return; }
+    if (!name.trim() || confirming) return;
     setConfirming(true);
-    const updated = [...current, { name: name.trim(), isOrganizer: false, status, at: Date.now() }];
-    saveAttendees(eventId, updated);
-    setAttendees(updated);
+    await addAttendee(eventId, { name: name.trim(), isOrganizer: false, status, at: Date.now() });
     setMyName(name.trim());
     setMyResponse(status);
     setConfirming(false);
@@ -365,7 +356,6 @@ function EventView({ eventId, onBack }) {
 
   return (
     <div className="event-view">
-      {onBack && <button className="back-btn" onClick={onBack}>← Volver</button>}
       <div className="event-hero">
         <div className="event-badge">🎾 Pádel</div>
         <div className="event-title">{event.title}</div>
@@ -407,7 +397,7 @@ function EventView({ eventId, onBack }) {
             {declined.map((p, i) => <div className="declined-item" key={i}>❌ {p.name}</div>)}
           </div>
         )}
-        <div className="refreshing">• se actualiza automáticamente</div>
+        <div className="refreshing">• se actualiza en tiempo real</div>
       </div>
       <div className="rsvp-section">
         <div className="rsvp-title">¿ESTÁS PARA JUGAR?</div>
@@ -415,13 +405,13 @@ function EventView({ eventId, onBack }) {
           <div className="confirmed-msg">
             <div className="emoji">✅</div>
             <strong>¡Confirmado, {myName}!</strong>
-            <p>Ya estás en el partido. Esta página se actualiza sola.</p>
+            <p>Ya estás en el partido.</p>
           </div>
         ) : myResponse === "declined" ? (
           <div className="declined-msg">
             <div className="emoji">😔</div>
             <strong>Avisaste que no podés, {myName}.</strong>
-            <p>Los demás lo saben. Esta página se actualiza sola.</p>
+            <p>Los demás lo saben.</p>
           </div>
         ) : (
           <div className="rsvp-input">
@@ -430,11 +420,11 @@ function EventView({ eventId, onBack }) {
             <div className="rsvp-buttons">
               {!full && (
                 <button className="btn-confirm" onClick={() => respond("confirmed")} disabled={!name.trim() || confirming}>
-                  {confirming === "confirmed" ? "..." : "✅ VOY"}
+                  {confirming ? "..." : "✅ VOY"}
                 </button>
               )}
               <button className="btn-decline" onClick={() => respond("declined")} disabled={!name.trim() || confirming}>
-                {confirming === "declined" ? "..." : "❌ NO PUEDO"}
+                {confirming ? "..." : "❌ NO PUEDO"}
               </button>
             </div>
           </div>
@@ -471,7 +461,7 @@ export default function App() {
     <div className="app">
       {screen === "creator" && <CreatorView onCreate={handleCreate} />}
       {screen === "share" && <ShareView eventId={currentEventId} onViewEvent={() => setScreen("event")} />}
-      {screen === "event" && <EventView eventId={currentEventId} onBack={null} />}
+      {screen === "event" && <EventView eventId={currentEventId} />}
     </div>
   );
 }
