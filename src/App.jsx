@@ -1,18 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "firebase/firestore";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyA0a6c5zpyjnZuZqRsg6-g75HskS2hpbBo",
-  authDomain: "padel-event-54231.firebaseapp.com",
-  projectId: "padel-event-54231",
-  storageBucket: "padel-event-54231.firebasestorage.app",
-  messagingSenderId: "495117525323",
-  appId: "1:495117525323:web:0446c9058088a4a5c608ce"
-};
-
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+const JSONBIN_KEY = "$2a$10$TmXqXV7I9aLrPTXWXBTd5..HQ.9J4wA6mzEvhbHdp7H1hV/lZOwma";
+const JSONBIN_URL = "https://api.jsonbin.io/v3/b";
 
 const GOOGLE_FONTS = `@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');`;
 
@@ -78,7 +67,7 @@ const styles = `
   .slots-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: #fff; letter-spacing: 0.5px; }
   .slots-count { font-size: 13px; color: #555; }
   .slots-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .slot { background: #141414; border: 1px solid #222; border-radius: 10px; padding: 16px; min-height: 70px; display: flex; align-items: center; gap: 10px; transition: border-color 0.2s; }
+  .slot { background: #141414; border: 1px solid #222; border-radius: 10px; padding: 16px; min-height: 70px; display: flex; align-items: center; gap: 10px; }
   .slot.filled { border-color: rgba(0,200,100,0.3); background: rgba(0,200,100,0.05); }
   .slot-number { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: #2a2a2a; line-height: 1; flex-shrink: 0; }
   .slot.filled .slot-number { color: rgba(0,200,100,0.3); }
@@ -111,8 +100,6 @@ const styles = `
   .declined-msg p { font-size: 14px; color: #666; }
   .declined-msg strong { color: #ff6060; font-size: 16px; display: block; margin-bottom: 4px; }
   .loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: #333; letter-spacing: 2px; }
-  .back-btn { background: transparent; border: none; color: #555; font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; padding: 20px 20px 0; display: flex; align-items: center; gap: 6px; }
-  .back-btn:hover { color: #f0f0f0; }
 `;
 
 function genId() { return Math.random().toString(36).slice(2, 9); }
@@ -127,18 +114,38 @@ function formatDate(dateStr) {
   return `${parseInt(d)} de ${months[parseInt(m)-1]} ${y}`;
 }
 
-// ── FIREBASE HELPERS ──
-async function saveEvent(id, event, attendees) {
-  await setDoc(doc(db, "events", id), { ...event, attendees });
+// ── JSONBIN HELPERS ──
+async function createBin(data) {
+  const res = await fetch(JSONBIN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": JSONBIN_KEY,
+      "X-Bin-Private": "false"
+    },
+    body: JSON.stringify(data)
+  });
+  const json = await res.json();
+  return json.metadata.id;
 }
-async function addAttendee(id, attendee) {
-  const ref = doc(db, "events", id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-  const current = snap.data().attendees || [];
-  const confirmed = current.filter(a => a.status === "confirmed");
-  if (attendee.status === "confirmed" && confirmed.length >= 4) return;
-  await updateDoc(ref, { attendees: [...current, attendee] });
+
+async function readBin(binId) {
+  const res = await fetch(`${JSONBIN_URL}/${binId}/latest`, {
+    headers: { "X-Master-Key": JSONBIN_KEY }
+  });
+  const json = await res.json();
+  return json.record;
+}
+
+async function updateBin(binId, data) {
+  await fetch(`${JSONBIN_URL}/${binId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": JSONBIN_KEY
+    },
+    body: JSON.stringify(data)
+  });
 }
 
 // ── LOCATION AUTOCOMPLETE ──
@@ -197,7 +204,7 @@ function LocationField({ value, onChange }) {
         </div>
       )}
       <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>
-        {placeId ? "📍 Lugar seleccionado — se abrirá en Google Maps" : "Escribí para buscar el lugar"}
+        {placeId ? "📍 Lugar seleccionado" : "Escribí para buscar el lugar"}
       </div>
     </div>
   );
@@ -227,11 +234,27 @@ function CreatorView({ onCreate }) {
 
   async function handleCreate() {
     setLoading(true);
-    const id = genId();
-    const event = { id, title: form.title.trim(), description: form.description, date: form.date, timeStart: form.timeStart, timeEnd: form.timeEnd, location: form.location.trim(), placeId: form.placeId || null, createdAt: Date.now() };
-    const attendees = includeOrganizer && organizerName.trim() ? [{ name: organizerName.trim(), isOrganizer: true, status: "confirmed", at: Date.now() }] : [];
-    await saveEvent(id, event, attendees);
-    onCreate(id);
+    try {
+      const attendees = includeOrganizer && organizerName.trim()
+        ? [{ name: organizerName.trim(), isOrganizer: true, status: "confirmed", at: Date.now() }]
+        : [];
+      const data = {
+        title: form.title.trim(),
+        description: form.description,
+        date: form.date,
+        timeStart: form.timeStart,
+        timeEnd: form.timeEnd,
+        location: form.location.trim(),
+        placeId: form.placeId || null,
+        createdAt: Date.now(),
+        attendees
+      };
+      const binId = await createBin(data);
+      onCreate(binId);
+    } catch(e) {
+      console.error(e);
+      alert("Error al crear el evento. Intentá de nuevo.");
+    }
     setLoading(false);
   }
 
@@ -326,24 +349,43 @@ function EventView({ eventId }) {
   const [confirming, setConfirming] = useState(false);
   const MAX_PLAYERS = 4;
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, "events", eventId), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        setEvent(data);
-        setAttendees(data.attendees || []);
-      }
-      setLoading(false);
-    });
-    return () => unsub();
+  const load = useCallback(async () => {
+    try {
+      const data = await readBin(eventId);
+      setEvent(data);
+      setAttendees(data.attendees || []);
+    } catch(e) {
+      console.error(e);
+    }
+    setLoading(false);
   }, [eventId]);
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 5000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   async function respond(status) {
     if (!name.trim() || confirming) return;
     setConfirming(true);
-    await addAttendee(eventId, { name: name.trim(), isOrganizer: false, status, at: Date.now() });
-    setMyName(name.trim());
-    setMyResponse(status);
+    try {
+      const data = await readBin(eventId);
+      const current = data.attendees || [];
+      const confirmed = current.filter(a => a.status === "confirmed");
+      if (status === "confirmed" && confirmed.length >= MAX_PLAYERS) {
+        setAttendees(current);
+        setConfirming(false);
+        return;
+      }
+      const updated = [...current, { name: name.trim(), isOrganizer: false, status, at: Date.now() }];
+      await updateBin(eventId, { ...data, attendees: updated });
+      setAttendees(updated);
+      setMyName(name.trim());
+      setMyResponse(status);
+    } catch(e) {
+      console.error(e);
+    }
     setConfirming(false);
   }
 
@@ -397,7 +439,7 @@ function EventView({ eventId }) {
             {declined.map((p, i) => <div className="declined-item" key={i}>❌ {p.name}</div>)}
           </div>
         )}
-        <div className="refreshing">• se actualiza en tiempo real</div>
+        <div className="refreshing">• se actualiza automáticamente</div>
       </div>
       <div className="rsvp-section">
         <div className="rsvp-title">¿ESTÁS PARA JUGAR?</div>
