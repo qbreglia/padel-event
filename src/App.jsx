@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const GOOGLE_FONTS = `@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');`;
 
@@ -19,6 +19,13 @@ const styles = `
   .field::placeholder { color: #444; }
   textarea.field { resize: vertical; min-height: 80px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .location-wrapper { position: relative; }
+  .autocomplete-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; margin-top: 4px; z-index: 100; overflow: hidden; }
+  .autocomplete-item { padding: 12px 16px; cursor: pointer; font-size: 14px; color: #ccc; border-bottom: 1px solid #222; transition: background 0.15s; }
+  .autocomplete-item:last-child { border-bottom: none; }
+  .autocomplete-item:hover { background: #222; color: #fff; }
+  .autocomplete-item .main { font-weight: 500; color: #f0f0f0; }
+  .autocomplete-item .secondary { font-size: 12px; color: #666; margin-top: 2px; }
   .organizer-toggle { display: flex; align-items: center; gap: 14px; background: #141414; border: 1px solid #222; border-radius: 10px; padding: 16px; cursor: pointer; transition: border-color 0.2s; }
   .organizer-toggle:hover { border-color: #333; }
   .organizer-toggle.active { border-color: #00c864; }
@@ -99,14 +106,16 @@ const eventKey = (id) => `${LS_PREFIX}event_${id}`;
 const attendeesKey = (id) => `${LS_PREFIX}attendees_${id}`;
 
 function genId() { return Math.random().toString(36).slice(2, 9); }
-function mapsLink(location) { return `https://maps.google.com/?q=${encodeURIComponent(location)}`; }
+function mapsLink(placeId, location) {
+  if (placeId) return `https://www.google.com/maps/place/?q=place_id:${placeId}`;
+  return `https://maps.google.com/?q=${encodeURIComponent(location)}`;
+}
 function formatDate(dateStr) {
   if (!dateStr) return "";
   const [y, m, d] = dateStr.split("-");
   const months = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   return `${parseInt(d)} de ${months[parseInt(m)-1]} ${y}`;
 }
-
 function saveEvent(id, event, attendees) {
   try {
     localStorage.setItem(eventKey(id), JSON.stringify(event));
@@ -124,19 +133,102 @@ function saveAttendees(id, attendees) {
   try { localStorage.setItem(attendeesKey(id), JSON.stringify(attendees)); } catch(e) {}
 }
 
+// ── LOCATION AUTOCOMPLETE ──
+function LocationField({ value, onChange }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [placeId, setPlaceId] = useState(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const autocompleteService = useRef(null);
+  const timeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (window.google && window.google.maps && window.google.maps.places) {
+      autocompleteService.current = new window.google.maps.places.AutocompleteService();
+    }
+  }, []);
+
+  function handleInput(e) {
+    const val = e.target.value;
+    onChange(val, null);
+    setPlaceId(null);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (!val.trim() || !autocompleteService.current) { setSuggestions([]); return; }
+    timeoutRef.current = setTimeout(() => {
+      autocompleteService.current.getPlacePredictions(
+        { input: val, types: ['establishment', 'geocode'] },
+        (predictions, status) => {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
+            setSuggestions(predictions.slice(0, 5));
+            setShowDropdown(true);
+          } else {
+            setSuggestions([]);
+          }
+        }
+      );
+    }, 300);
+  }
+
+  function selectPlace(prediction) {
+    onChange(prediction.structured_formatting.main_text, prediction.place_id);
+    setPlaceId(prediction.place_id);
+    setSuggestions([]);
+    setShowDropdown(false);
+  }
+
+  return (
+    <div className="location-wrapper">
+      <input
+        className="field"
+        placeholder="Ej: Club Escobar, Benavidez..."
+        value={value}
+        onChange={handleInput}
+        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+        onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+        autoComplete="off"
+      />
+      {showDropdown && suggestions.length > 0 && (
+        <div className="autocomplete-dropdown">
+          {suggestions.map((s) => (
+            <div key={s.place_id} className="autocomplete-item" onMouseDown={() => selectPlace(s)}>
+              <div className="main">{s.structured_formatting.main_text}</div>
+              <div className="secondary">{s.structured_formatting.secondary_text}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>
+        {placeId ? "📍 Lugar seleccionado — se abrirá en Google Maps" : "Escribí para buscar el lugar"}
+      </div>
+    </div>
+  );
+}
+
 // ── CREATOR ──
 function CreatorView({ onCreate }) {
-  const [form, setForm] = useState({ title: "", description: "", date: "", timeStart: "", timeEnd: "", location: "" });
+  const [form, setForm] = useState({ title: "", description: "", date: "", timeStart: "", timeEnd: "", location: "", placeId: null });
   const [includeOrganizer, setIncludeOrganizer] = useState(true);
   const [organizerName, setOrganizerName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mapsReady, setMapsReady] = useState(false);
+
+  useEffect(() => {
+    const apiKey = process.env.REACT_APP_GOOGLE_MAPS_KEY;
+    if (!apiKey) return;
+    if (window.google) { setMapsReady(true); return; }
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.onload = () => setMapsReady(true);
+    document.head.appendChild(script);
+  }, []);
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const canCreate = !!(form.title.trim() && form.date && form.timeStart && form.location.trim() && (!includeOrganizer || organizerName.trim()));
 
   function handleCreate() {
     setLoading(true);
     const id = genId();
-    const event = { id, title: form.title.trim(), description: form.description, date: form.date, timeStart: form.timeStart, timeEnd: form.timeEnd, location: form.location.trim(), createdAt: Date.now() };
+    const event = { id, title: form.title.trim(), description: form.description, date: form.date, timeStart: form.timeStart, timeEnd: form.timeEnd, location: form.location.trim(), placeId: form.placeId, createdAt: Date.now() };
     const attendees = includeOrganizer && organizerName.trim() ? [{ name: organizerName.trim(), isOrganizer: true, status: "confirmed", at: Date.now() }] : [];
     saveEvent(id, event, attendees);
     onCreate(id);
@@ -170,8 +262,17 @@ function CreatorView({ onCreate }) {
       </div>
       <div className="section">
         <div className="section-label">Lugar</div>
-        <input className="field" placeholder="Ej: Club Escobar, Benavidez..." value={form.location} onChange={e => set("location", e.target.value)} />
-        <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>Se generará link a Google Maps automáticamente</div>
+        {mapsReady ? (
+          <LocationField
+            value={form.location}
+            onChange={(loc, pid) => setForm(f => ({ ...f, location: loc, placeId: pid }))}
+          />
+        ) : (
+          <>
+            <input className="field" placeholder="Ej: Club Escobar, Benavidez..." value={form.location} onChange={e => set("location", e.target.value)} />
+            <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>Se generará link a Google Maps automáticamente</div>
+          </>
+        )}
       </div>
       <div className="section">
         <div className="section-label">¿Te incluís como jugador?</div>
@@ -273,14 +374,13 @@ function EventView({ eventId, onBack }) {
           <div className="meta-row"><div className="meta-icon">🕐</div>{event.timeStart}{event.timeEnd ? ` → ${event.timeEnd}` : ""}</div>
           <div className="meta-row">
             <div className="meta-icon">📍</div>
-            <a className="meta-link" href={mapsLink(event.location)} target="_blank" rel="noreferrer">{event.location} ↗</a>
+            <a className="meta-link" href={mapsLink(event.placeId, event.location)} target="_blank" rel="noreferrer">{event.location} ↗</a>
           </div>
           {event.description && (
             <div className="meta-row"><div className="meta-icon">💬</div><span style={{ color: "#888", fontSize: 13 }}>{event.description}</span></div>
           )}
         </div>
       </div>
-
       <div className="slots-section">
         <div className="slots-header">
           <div className="slots-title">JUGADORES</div>
@@ -309,7 +409,6 @@ function EventView({ eventId, onBack }) {
         )}
         <div className="refreshing">• se actualiza automáticamente</div>
       </div>
-
       <div className="rsvp-section">
         <div className="rsvp-title">¿ESTÁS PARA JUGAR?</div>
         {myResponse === "confirmed" ? (
@@ -372,7 +471,7 @@ export default function App() {
     <div className="app">
       {screen === "creator" && <CreatorView onCreate={handleCreate} />}
       {screen === "share" && <ShareView eventId={currentEventId} onViewEvent={() => setScreen("event")} />}
-      {screen === "event" && <EventView eventId={currentEventId} onBack={screen === "share" ? () => setScreen("share") : null} />}
+      {screen === "event" && <EventView eventId={currentEventId} onBack={null} />}
     </div>
   );
 }
