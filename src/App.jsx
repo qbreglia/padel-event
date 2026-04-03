@@ -353,7 +353,7 @@ function ShareView({ eventId, adminKey, onViewEvent }) {
         <span className="link-text">{link}</span>
         <button className="btn-copy" onClick={copy}>{copied ? "✓ Copiado" : "Copiar"}</button>
       </div>
-      <button className="btn-view" onClick={onViewEvent}>Ver el evento →</button>
+      <button className="btn-view" onClick={onViewEvent}>⚙️ Ver como administrador →</button>
     </div>
   );
 }
