@@ -397,7 +397,7 @@ function EventView({ eventId, adminKey }) {
         const data = snap.data();
         setEvent(data);
         setAttendees(data.attendees || []);
-        setEditForm({ title: data.title, date: data.date, timeStart: data.timeStart, timeEnd: data.timeEnd, location: data.location, description: data.description || "" });
+        setEditForm({ title: data.title, date: data.date, timeStart: data.timeStart, timeEnd: data.timeEnd, location: data.location, placeId: data.placeId || null, description: data.description || "" });
       }
       setLoading(false);
     });
@@ -434,6 +434,7 @@ function EventView({ eventId, adminKey }) {
       timeStart: editForm.timeStart,
       timeEnd: editForm.timeEnd,
       location: editForm.location,
+      placeId: editForm.placeId || null,
       description: editForm.description,
     });
     setSaving(false);
@@ -545,7 +546,12 @@ function EventView({ eventId, adminKey }) {
                 <input className="edit-field" type="time" value={editForm.timeStart} onChange={e => setEditForm(f=>({...f,timeStart:e.target.value}))} style={{marginBottom:0}} />
                 <input className="edit-field" type="time" value={editForm.timeEnd} onChange={e => setEditForm(f=>({...f,timeEnd:e.target.value}))} style={{marginBottom:0}} />
               </div>
-              <input className="edit-field" placeholder="Lugar" value={editForm.location} onChange={e => setEditForm(f=>({...f,location:e.target.value}))} />
+              <div style={{marginBottom:8}}>
+                <LocationField
+                  value={editForm.location}
+                  onChange={(loc, pid) => setEditForm(f => ({ ...f, location: loc, placeId: pid || f.placeId }))}
+                />
+              </div>
               <textarea className="edit-field" placeholder="Descripción" value={editForm.description} onChange={e => setEditForm(f=>({...f,description:e.target.value}))} style={{resize:"vertical",minHeight:60}} />
               <button className="btn-save" onClick={saveEdit} disabled={saving}>{saving ? "GUARDANDO..." : "GUARDAR CAMBIOS"}</button>
             </div>
