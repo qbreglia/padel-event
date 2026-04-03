@@ -121,7 +121,7 @@ const styles = `
 
 function genId() { return Math.random().toString(36).slice(2, 9); }
 function mapsLink(placeId, location) {
-  if (placeId) return `https://www.google.com/maps/place/?q=place_id:${placeId}`;
+  if (placeId) return `https://maps.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}&query_place_id=${placeId}`;
   return `https://maps.google.com/?q=${encodeURIComponent(location)}`;
 }
 function formatDate(dateStr) {
