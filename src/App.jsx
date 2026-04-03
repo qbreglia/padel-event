@@ -49,6 +49,24 @@ const styles = `
   .btn-copy:hover { opacity: 0.85; }
   .btn-view { width: 100%; background: transparent; border: 1px solid #333; border-radius: 10px; padding: 16px; color: #f0f0f0; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; transition: border-color 0.2s; margin-top: 10px; }
   .btn-view:hover { border-color: #555; }
+  .btn-admin { width: 100%; background: transparent; border: 1px solid #00c864; border-radius: 10px; padding: 17px; color: #00c864; font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; margin-top: 0; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .btn-admin:hover { background: rgba(0,200,100,0.08); }
+  .admin-note { font-size: 12px; color: #444; text-align: center; margin-top: 8px; }
+  .admin-view { max-width: 480px; margin: 0 auto; padding: 0 0 60px; }
+  .admin-section { padding: 20px; border-bottom: 1px solid #1a1a1a; }
+  .admin-title { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: #fff; margin-bottom: 14px; letter-spacing: 0.5px; }
+  .admin-player { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #1a1a1a; }
+  .admin-player:last-child { border-bottom: none; }
+  .admin-player-name { font-size: 14px; color: #f0f0f0; }
+  .admin-player-status { font-size: 12px; color: #555; margin-top: 2px; }
+  .btn-remove { background: transparent; border: 1px solid #333; border-radius: 6px; padding: 6px 12px; color: #ff6060; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+  .btn-remove:hover { border-color: #ff6060; background: rgba(255,96,96,0.08); }
+  .edit-field { width: 100%; background: #141414; border: 1px solid #222; border-radius: 8px; padding: 10px 14px; color: #f0f0f0; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; margin-bottom: 8px; }
+  .edit-field:focus { border-color: #00c864; }
+  .btn-save { background: #00c864; color: #000; border: none; border-radius: 8px; padding: 12px 24px; font-family: 'Bebas Neue', sans-serif; font-size: 18px; cursor: pointer; letter-spacing: 1px; transition: opacity 0.2s; }
+  .btn-save:hover { opacity: 0.85; }
+  .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+  .saved-msg { font-size: 13px; color: #00c864; margin-left: 10px; }
   .btn-whatsapp { width: 100%; background: #25D366; color: #fff; border: none; border-radius: 10px; padding: 18px; font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; cursor: pointer; transition: opacity 0.2s; margin-top: 0; display: flex; align-items: center; justify-content: center; gap: 10px; }
   .btn-whatsapp:hover { opacity: 0.88; }
   .event-view { max-width: 480px; margin: 0 auto; padding: 0 0 60px; }
@@ -230,8 +248,10 @@ function CreatorView({ onCreate }) {
         location: form.location.trim(), placeId: form.placeId || null,
         createdAt: Date.now(), attendees
       };
+      const adminKey = Math.random().toString(36).slice(2, 10);
+      data.adminKey = adminKey;
       await saveEvent(id, data);
-      onCreate(id);
+      onCreate(id, adminKey);
     } catch(e) {
       console.error(e);
       alert("Error al crear el evento: " + e.message);
@@ -298,9 +318,12 @@ function CreatorView({ onCreate }) {
 }
 
 // ── SHARE ──
-function ShareView({ eventId, onViewEvent }) {
+function ShareView({ eventId, adminKey, onViewEvent }) {
   const [copied, setCopied] = useState(false);
-  const link = `${window.location.origin}${window.location.pathname}?event=${eventId}`;
+  const base = `${window.location.origin}${window.location.pathname}`;
+  const link = `${base}?event=${eventId}`;
+  const adminLink = `${base}?event=${eventId}&admin=${adminKey}`;
+
   function copy() {
     navigator.clipboard.writeText(link).catch(() => {});
     setCopied(true);
@@ -310,14 +333,22 @@ function ShareView({ eventId, onViewEvent }) {
     const msg = encodeURIComponent("Te invitaron a un partido de pádel 🎾\n\nVer detalles y confirmar si vas:\n" + link);
     window.open("https://wa.me/?text=" + msg, "_blank");
   }
+  function saveAdminLink() {
+    const msg = encodeURIComponent("🔐 Mi link de administrador para el partido:\n" + adminLink + "\n\n(Guardalo, es el único que te permite editar el evento)");
+    window.open("https://wa.me/?text=" + msg, "_blank");
+  }
   return (
     <div className="share-screen">
       <h2>¡LISTO!</h2>
-      <p>Compartí el link por WhatsApp. Los primeros 4 en confirmar se suman al partido.</p>
+      <p>Compartí el link con tus amigos y guardá tu link de admin.</p>
       <button className="btn-whatsapp" onClick={shareWhatsApp}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.104.549 4.078 1.508 5.793L0 24l6.375-1.493A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.37l-.36-.214-3.732.874.944-3.641-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
-        COMPARTIR POR WHATSAPP
+        COMPARTIR CON AMIGOS
       </button>
+      <button className="btn-admin" onClick={saveAdminLink} style={{marginTop: 10}}>
+        🔐 GUARDAR MI LINK DE ADMIN
+      </button>
+      <p className="admin-note">Te lo mandás a vos mismo por WhatsApp para no perderlo</p>
       <div className="link-box" style={{marginTop: 14}}>
         <span className="link-text">{link}</span>
         <button className="btn-copy" onClick={copy}>{copied ? "✓ Copiado" : "Copiar"}</button>
@@ -328,7 +359,7 @@ function ShareView({ eventId, onViewEvent }) {
 }
 
 // ── EVENT VIEW ──
-function EventView({ eventId }) {
+function EventView({ eventId, adminKey }) {
   const [event, setEvent] = useState(null);
   const [attendees, setAttendees] = useState([]);
   const [name, setName] = useState("");
@@ -336,7 +367,13 @@ function EventView({ eventId }) {
   const [myResponse, setMyResponse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(false);
   const MAX_PLAYERS = 4;
+
+  const isAdmin = adminKey && event && event.adminKey === adminKey;
 
   useEffect(() => {
     const db = getDb();
@@ -346,6 +383,7 @@ function EventView({ eventId }) {
         const data = snap.data();
         setEvent(data);
         setAttendees(data.attendees || []);
+        setEditForm({ title: data.title, date: data.date, timeStart: data.timeStart, timeEnd: data.timeEnd, location: data.location, description: data.description || "" });
       }
       setLoading(false);
     });
@@ -361,6 +399,29 @@ function EventView({ eventId }) {
       setMyResponse(status);
     } catch(e) { console.error(e); }
     setConfirming(false);
+  }
+
+  async function removeAttendee(idx) {
+    const db = getDb();
+    const updated = attendees.filter((_, i) => i !== idx);
+    await db.collection("events").doc(eventId).update({ attendees: updated });
+  }
+
+  async function saveEdit() {
+    setSaving(true);
+    const db = getDb();
+    await db.collection("events").doc(eventId).update({
+      title: editForm.title,
+      date: editForm.date,
+      timeStart: editForm.timeStart,
+      timeEnd: editForm.timeEnd,
+      location: editForm.location,
+      description: editForm.description,
+    });
+    setSaving(false);
+    setSavedMsg(true);
+    setEditMode(false);
+    setTimeout(() => setSavedMsg(false), 3000);
   }
 
   if (loading) return <div className="loading">CARGANDO...</div>;
@@ -446,6 +507,44 @@ function EventView({ eventId }) {
           </div>
         )}
       </div>
+
+      {isAdmin && (
+        <div className="admin-section">
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+            <div className="admin-title">⚙️ PANEL DE ADMIN</div>
+            <button className="btn-remove" onClick={() => setEditMode(v => !v)} style={{color:"#00c864",borderColor:"#00c864"}}>
+              {editMode ? "Cancelar" : "Editar evento"}
+            </button>
+            {savedMsg && <span className="saved-msg">✓ Guardado</span>}
+          </div>
+
+          {editMode && (
+            <div style={{marginBottom:16}}>
+              <input className="edit-field" placeholder="Título" value={editForm.title} onChange={e => setEditForm(f=>({...f,title:e.target.value}))} />
+              <input className="edit-field" type="date" value={editForm.date} onChange={e => setEditForm(f=>({...f,date:e.target.value}))} />
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                <input className="edit-field" type="time" value={editForm.timeStart} onChange={e => setEditForm(f=>({...f,timeStart:e.target.value}))} style={{marginBottom:0}} />
+                <input className="edit-field" type="time" value={editForm.timeEnd} onChange={e => setEditForm(f=>({...f,timeEnd:e.target.value}))} style={{marginBottom:0}} />
+              </div>
+              <input className="edit-field" placeholder="Lugar" value={editForm.location} onChange={e => setEditForm(f=>({...f,location:e.target.value}))} />
+              <textarea className="edit-field" placeholder="Descripción" value={editForm.description} onChange={e => setEditForm(f=>({...f,description:e.target.value}))} style={{resize:"vertical",minHeight:60}} />
+              <button className="btn-save" onClick={saveEdit} disabled={saving}>{saving ? "GUARDANDO..." : "GUARDAR CAMBIOS"}</button>
+            </div>
+          )}
+
+          <div className="admin-title" style={{fontSize:16,marginBottom:10}}>JUGADORES</div>
+          {attendees.map((p, i) => (
+            <div className="admin-player" key={i}>
+              <div>
+                <div className="admin-player-name">{p.name} {p.isOrganizer ? "👑" : ""}</div>
+                <div className="admin-player-status">{p.status === "confirmed" ? "✅ Confirmado" : "❌ No puede"}</div>
+              </div>
+              <button className="btn-remove" onClick={() => removeAttendee(i)}>Eliminar</button>
+            </div>
+          ))}
+          {attendees.length === 0 && <div style={{fontSize:13,color:"#444"}}>Sin respuestas aún</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -460,6 +559,10 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get("event") || null;
   });
+  const [adminKey, setAdminKey] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("admin") || null;
+  });
 
   useEffect(() => {
     const styleEl = document.createElement("style");
@@ -468,16 +571,17 @@ export default function App() {
     return () => styleEl.remove();
   }, []);
 
-  function handleCreate(id) {
+  function handleCreate(id, adminKey) {
     setCurrentEventId(id);
+    setAdminKey(adminKey);
     setScreen("share");
   }
 
   return (
     <div className="app">
       {screen === "creator" && <CreatorView onCreate={handleCreate} />}
-      {screen === "share" && <ShareView eventId={currentEventId} onViewEvent={() => setScreen("event")} />}
-      {screen === "event" && <EventView eventId={currentEventId} />}
+      {screen === "share" && <ShareView eventId={currentEventId} adminKey={adminKey} onViewEvent={() => setScreen("event")} />}
+      {screen === "event" && <EventView eventId={currentEventId} adminKey={adminKey} />}
     </div>
   );
 }
