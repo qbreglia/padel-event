@@ -2,7 +2,7 @@ export default function handler(req, res) {
   const eventId = req.query.event || '';
   const userAgent = req.headers['user-agent'] || '';
   const isCrawler = /facebookexternalhit|whatsapp|twitterbot|linkedinbot|telegrambot|slackbot|discordbot/i.test(userAgent);
-  const appUrl = `https://padel-event-green.vercel.app/?event=${eventId}`;
+  const appUrl = `https://partido-de-padel.netlify.app/?event=${eventId}`;
   const imageUrl = 'https://res.cloudinary.com/dc8ih423g/image/upload/v1775232171/Gemini_Generated_Image_8713d38713d38713_iekmof.png';
 
   if (isCrawler) {
@@ -25,7 +25,6 @@ export default function handler(req, res) {
   <meta http-equiv="refresh" content="0;url=${appUrl}" />
 </head>
 <body>
-  <p>Redirigiendo al partido...</p>
   <a href="${appUrl}">Hacé clic acá si no te redirige automáticamente</a>
 </body>
 </html>`);
