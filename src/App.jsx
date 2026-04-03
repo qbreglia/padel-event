@@ -320,17 +320,18 @@ function CreatorView({ onCreate }) {
 // ── SHARE ──
 function ShareView({ eventId, adminKey, onViewEvent }) {
   const [copied, setCopied] = useState(false);
-  const base = `${window.location.origin}${window.location.pathname}`;
-  const link = `${base}?event=${eventId}`;
-  const adminLink = `${base}?event=${eventId}&admin=${adminKey}`;
+  const base = `${window.location.origin}`;
+  const link = `${base}/?event=${eventId}`;
+  const shareLink = `${base}/api/preview?event=${eventId}`;
+  const adminLink = `${base}/?event=${eventId}&admin=${adminKey}`;
 
   function copy() {
-    navigator.clipboard.writeText(link).catch(() => {});
+    navigator.clipboard.writeText(shareLink).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
   function shareWhatsApp() {
-    const msg = encodeURIComponent("Te invitaron a un partido de pádel 🎾\n\nVer detalles y confirmar si vas:\n" + link);
+    const msg = encodeURIComponent("Te invitaron a un partido de pádel 🎾\n\nVer detalles y confirmar si vas:\n" + shareLink);
     window.open("https://wa.me/?text=" + msg, "_blank");
   }
   function saveAdminLink() {
@@ -350,7 +351,7 @@ function ShareView({ eventId, adminKey, onViewEvent }) {
       </button>
       <p className="admin-note">Te lo mandás a vos mismo por WhatsApp para no perderlo</p>
       <div className="link-box" style={{marginTop: 14}}>
-        <span className="link-text">{link}</span>
+        <span className="link-text">{shareLink}</span>
         <button className="btn-copy" onClick={copy}>{copied ? "✓ Copiado" : "Copiar"}</button>
       </div>
       <button className="btn-view" onClick={onViewEvent}>⚙️ Ver como administrador →</button>
@@ -539,7 +540,7 @@ function EventView({ eventId, adminKey }) {
 
           <button className="btn-whatsapp" style={{marginBottom:16,fontSize:18,padding:"14px"}} onClick={() => {
             const base = window.location.origin + window.location.pathname;
-            const inviteLink = base + "?event=" + eventId;
+            const inviteLink = window.location.origin + "/api/preview?event=" + eventId;
             const msg = encodeURIComponent("Te invitaron a un partido de pádel 🎾\n\nVer detalles y confirmar si vas:\n" + inviteLink);
             window.open("https://wa.me/?text=" + msg, "_blank");
           }}>
