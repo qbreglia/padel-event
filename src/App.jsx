@@ -395,8 +395,12 @@ function EventView({ eventId, adminKey }) {
     setConfirming(true);
     try {
       await addAttendee(eventId, { name: name.trim(), isOrganizer: false, status, at: Date.now() });
-      setMyName(name.trim());
-      setMyResponse(status);
+      if (isAdmin) {
+        setName("");
+      } else {
+        setMyName(name.trim());
+        setMyResponse(status);
+      }
     } catch(e) { console.error(e); }
     setConfirming(false);
   }
@@ -478,13 +482,13 @@ function EventView({ eventId, adminKey }) {
       </div>
       <div className="rsvp-section">
         <div className="rsvp-title">¿ESTÁS PARA JUGAR?</div>
-        {myResponse === "confirmed" ? (
+        {!isAdmin && myResponse === "confirmed" ? (
           <div className="confirmed-msg">
             <div className="emoji">✅</div>
             <strong>¡Confirmado, {myName}!</strong>
             <p>Ya estás en el partido.</p>
           </div>
-        ) : myResponse === "declined" ? (
+        ) : !isAdmin && myResponse === "declined" ? (
           <div className="declined-msg">
             <div className="emoji">😔</div>
             <strong>Avisaste que no podés, {myName}.</strong>
@@ -492,10 +496,11 @@ function EventView({ eventId, adminKey }) {
           </div>
         ) : (
           <div className="rsvp-input">
-            {full ? <div className="rsvp-full-banner">🔒 El partido está completo</div> : <div className="rsvp-sub">Quedan {MAX_PLAYERS - confirmed.length} lugar{MAX_PLAYERS - confirmed.length !== 1 ? "es" : ""}</div>}
-            <input className="field" placeholder="Tu nombre" value={name} onChange={e => setName(e.target.value)} />
+            {isAdmin && <div style={{fontSize:12,color:"#555",marginBottom:4}}>Como admin podés agregar jugadores manualmente</div>}
+            {full && !isAdmin ? <div className="rsvp-full-banner">🔒 El partido está completo</div> : !full && <div className="rsvp-sub">Quedan {MAX_PLAYERS - confirmed.length} lugar{MAX_PLAYERS - confirmed.length !== 1 ? "es" : ""}</div>}
+            <input className="field" placeholder="Nombre del jugador" value={name} onChange={e => setName(e.target.value)} />
             <div className="rsvp-buttons">
-              {!full && (
+              {(!full || isAdmin) && (
                 <button className="btn-confirm" onClick={() => respond("confirmed")} disabled={!name.trim() || confirming}>
                   {confirming ? "..." : "✅ VOY"}
                 </button>
