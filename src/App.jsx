@@ -49,6 +49,8 @@ const styles = `
   .btn-copy:hover { opacity: 0.85; }
   .btn-view { width: 100%; background: transparent; border: 1px solid #333; border-radius: 10px; padding: 16px; color: #f0f0f0; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; transition: border-color 0.2s; margin-top: 10px; }
   .btn-view:hover { border-color: #555; }
+  .btn-whatsapp { width: 100%; background: #25D366; color: #fff; border: none; border-radius: 10px; padding: 18px; font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; cursor: pointer; transition: opacity 0.2s; margin-top: 0; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .btn-whatsapp:hover { opacity: 0.88; }
   .event-view { max-width: 480px; margin: 0 auto; padding: 0 0 60px; }
   .event-hero { background: linear-gradient(160deg, #0d1f12 0%, #0a0a0a 60%); border-bottom: 1px solid #1a1a1a; padding: 36px 20px 28px; position: relative; overflow: hidden; }
   .event-hero::before { content: '🎾'; position: absolute; right: -10px; top: -10px; font-size: 120px; opacity: 0.06; transform: rotate(-15deg); }
@@ -304,11 +306,19 @@ function ShareView({ eventId, onViewEvent }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
+  function shareWhatsApp() {
+    const msg = encodeURIComponent("Te invitaron a un partido de pádel 🎾\n\nVer detalles y confirmar si vas:\n" + link);
+    window.open("https://wa.me/?text=" + msg, "_blank");
+  }
   return (
     <div className="share-screen">
       <h2>¡LISTO!</h2>
-      <p>Copiá el link y mandalo por WhatsApp. Los primeros 4 en confirmar se suman al partido.</p>
-      <div className="link-box">
+      <p>Compartí el link por WhatsApp. Los primeros 4 en confirmar se suman al partido.</p>
+      <button className="btn-whatsapp" onClick={shareWhatsApp}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.104.549 4.078 1.508 5.793L0 24l6.375-1.493A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.37l-.36-.214-3.732.874.944-3.641-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
+        COMPARTIR POR WHATSAPP
+      </button>
+      <div className="link-box" style={{marginTop: 14}}>
         <span className="link-text">{link}</span>
         <button className="btn-copy" onClick={copy}>{copied ? "✓ Copiado" : "Copiar"}</button>
       </div>
