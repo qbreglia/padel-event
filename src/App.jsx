@@ -156,39 +156,47 @@ function LocationField({ value, onChange }) {
   const [suggestions, setSuggestions] = useState([]);
   const [placeId, setPlaceId] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
-  const autocompleteService = useRef(null);
   const timeoutRef = useRef(null);
+  const sessionToken = useRef(null);
 
   useEffect(() => {
     if (window.google && window.google.maps && window.google.maps.places) {
-      autocompleteService.current = new window.google.maps.places.AutocompleteService();
+      sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
     }
   }, []);
 
-  function handleInput(e) {
+  async function handleInput(e) {
     const val = e.target.value;
     onChange(val, null);
     setPlaceId(null);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (!val.trim() || !autocompleteService.current) { setSuggestions([]); return; }
-    timeoutRef.current = setTimeout(() => {
-      autocompleteService.current.getPlacePredictions(
-        { input: val, types: ['establishment', 'geocode'] },
-        (predictions, status) => {
-          if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-            setSuggestions(predictions.slice(0, 5));
-            setShowDropdown(true);
-          } else { setSuggestions([]); }
-        }
-      );
+    if (!val.trim() || !window.google) { setSuggestions([]); return; }
+    timeoutRef.current = setTimeout(async () => {
+      try {
+        const request = {
+          input: val,
+          sessionToken: sessionToken.current,
+          language: "es",
+          region: "ar",
+        };
+        const { suggestions: results } = await window.google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+        setSuggestions(results.slice(0, 5));
+        setShowDropdown(true);
+      } catch (e) {
+        setSuggestions([]);
+      }
     }, 300);
   }
 
-  function selectPlace(prediction) {
-    onChange(prediction.structured_formatting.main_text, prediction.place_id);
-    setPlaceId(prediction.place_id);
+  function selectPlace(s) {
+    const pred = s.placePrediction;
+    const mainText = pred.mainText ? pred.mainText.toString() : pred.text.toString();
+    const pid = pred.placeId;
+    onChange(mainText, pid);
+    setPlaceId(pid);
     setSuggestions([]);
     setShowDropdown(false);
+    sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
   }
 
   return (
@@ -198,12 +206,17 @@ function LocationField({ value, onChange }) {
         onFocus={() => suggestions.length > 0 && setShowDropdown(true)} autoComplete="off" />
       {showDropdown && suggestions.length > 0 && (
         <div className="autocomplete-dropdown">
-          {suggestions.map((s) => (
-            <div key={s.place_id} className="autocomplete-item" onMouseDown={() => selectPlace(s)}>
-              <div className="main">{s.structured_formatting.main_text}</div>
-              <div className="secondary">{s.structured_formatting.secondary_text}</div>
-            </div>
-          ))}
+          {suggestions.map((s, i) => {
+            const pred = s.placePrediction;
+            const main = pred.mainText ? pred.mainText.toString() : pred.text.toString();
+            const secondary = pred.secondaryText ? pred.secondaryText.toString() : "";
+            return (
+              <div key={i} className="autocomplete-item" onMouseDown={() => selectPlace(s)}>
+                <div className="main">{main}</div>
+                {secondary && <div className="secondary">{secondary}</div>}
+              </div>
+            );
+          })}
         </div>
       )}
       <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>
@@ -226,7 +239,7 @@ function CreatorView({ onCreate }) {
     if (!apiKey) return;
     if (window.google) { setMapsReady(true); return; }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&v=weekly&loading=async`;
     script.async = true;
     script.onload = () => setMapsReady(true);
     document.head.appendChild(script);
