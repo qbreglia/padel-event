@@ -132,36 +132,7 @@ function formatDate(dateStr) {
   return `${parseInt(d)} de ${months[parseInt(m)-1]} ${y}`;
 }
 
-function useCountdown(dateStr, timeStr) {
-  const [countdown, setCountdown] = useState("");
-  useEffect(() => {
-    if (!dateStr || !timeStr) return;
-    try {
-      function calc() {
-        try {
-          const eventDate = new Date(`${dateStr}T${timeStr}:00`);
-          if (isNaN(eventDate.getTime())) return;
-          const now = new Date();
-          const diff = eventDate - now;
-          if (diff <= 0) {
-            setCountdown("¡El partido ya comenzó!");
-            return;
-          }
-          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-          const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-          const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-          if (days > 0) setCountdown(`Faltan ${days} día${days !== 1 ? "s" : ""} y ${hours} hora${hours !== 1 ? "s" : ""}`);
-          else if (hours > 0) setCountdown(`Faltan ${hours} hora${hours !== 1 ? "s" : ""} y ${mins} minuto${mins !== 1 ? "s" : ""}`);
-          else setCountdown(`Faltan ${mins} minuto${mins !== 1 ? "s" : ""}`);
-        } catch(e) {}
-      }
-      calc();
-      const interval = setInterval(calc, 60000);
-      return () => clearInterval(interval);
-    } catch(e) {}
-  }, [dateStr, timeStr]);
-  return countdown;
-}
+
 
 function getDb() { return window.db; }
 
@@ -418,6 +389,30 @@ function EventView({ eventId, adminKey }) {
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [changingResponse, setChangingResponse] = useState(false);
+  const [countdown, setCountdown] = useState("");
+
+  useEffect(() => {
+    function calcCountdown(dateStr, timeStr) {
+      if (!dateStr || !timeStr) return "";
+      try {
+        const eventDate = new Date(`${dateStr}T${timeStr}:00`);
+        if (isNaN(eventDate.getTime())) return "";
+        const now = new Date();
+        const diff = eventDate - now;
+        if (diff <= 0) return "¡El partido ya comenzó!";
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        if (days > 0) return `Faltan ${days} día${days !== 1 ? "s" : ""} y ${hours} hora${hours !== 1 ? "s" : ""}`;
+        if (hours > 0) return `Faltan ${hours} hora${hours !== 1 ? "s" : ""} y ${mins} minuto${mins !== 1 ? "s" : ""}`;
+        return `Faltan ${mins} minuto${mins !== 1 ? "s" : ""}`;
+      } catch(e) { return ""; }
+    }
+    if (!event) return;
+    setCountdown(calcCountdown(event.date, event.timeStart));
+    const interval = setInterval(() => setCountdown(calcCountdown(event.date, event.timeStart)), 60000);
+    return () => clearInterval(interval);
+  }, [event]);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
@@ -508,7 +503,7 @@ function EventView({ eventId, adminKey }) {
   const confirmed = attendees.filter(a => a.status === "confirmed");
   const declined = attendees.filter(a => a.status === "declined");
   const full = confirmed.length >= MAX_PLAYERS;
-  const countdown = useCountdown(event?.date, event?.timeStart);
+
 
   return (
     <div className="event-view">
