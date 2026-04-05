@@ -126,6 +126,20 @@ const styles = `
   .btn-cancel:hover { background: rgba(255,64,64,0.08); }
   .btn-calendar { width: 100%; background: transparent; border: 1px solid #4a90d9; border-radius: 10px; padding: 14px; color: #4a90d9; font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
   .btn-calendar:hover { background: rgba(74,144,217,0.08); }
+  .my-events { max-width: 480px; margin: 0 auto; padding: 32px 20px 60px; }
+  .my-events-header { margin-bottom: 28px; }
+  .my-events-header .label { font-size: 11px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: #00c864; margin-bottom: 8px; }
+  .my-events-header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 48px; line-height: 0.95; color: #fff; letter-spacing: 1px; }
+  .my-events-header h1 span { color: #00c864; }
+  .event-card { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 18px; margin-bottom: 12px; cursor: pointer; transition: border-color 0.2s; }
+  .event-card:hover { border-color: #00c864; }
+  .event-card-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: #fff; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .event-card-meta { font-size: 13px; color: #666; display: flex; gap: 14px; align-items: center; }
+  .event-card-slots { font-size: 13px; color: #00c864; font-weight: 600; }
+  .event-card-cancelled { opacity: 0.5; }
+  .btn-new-event { width: 100%; background: #00c864; color: #000; border: none; border-radius: 10px; padding: 18px; font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; cursor: pointer; transition: opacity 0.2s; margin-top: 8px; }
+  .btn-new-event:hover { opacity: 0.9; }
+  .no-events { text-align: center; padding: 40px 20px; color: #444; font-size: 15px; }
 `;
 
 function genId() { return Math.random().toString(36).slice(2, 9); }
@@ -143,6 +157,24 @@ function formatDate(dateStr) {
 
 
 function getDb() { return window.db; }
+
+function getSavedEvents() {
+  try {
+    const saved = localStorage.getItem('padel_my_events');
+    return saved ? JSON.parse(saved) : [];
+  } catch(e) { return []; }
+}
+
+function saveEventToHistory(id, adminKey, title, date) {
+  try {
+    const events = getSavedEvents();
+    const existing = events.findIndex(e => e.id === id);
+    const entry = { id, adminKey, title, date, createdAt: Date.now() };
+    if (existing >= 0) events[existing] = entry;
+    else events.unshift(entry);
+    localStorage.setItem('padel_my_events', JSON.stringify(events.slice(0, 20)));
+  } catch(e) {}
+}
 
 async function saveEvent(id, data) {
   const db = getDb();
@@ -275,6 +307,7 @@ function CreatorView({ onCreate }) {
       const adminKey = Math.random().toString(36).slice(2, 10);
       data.adminKey = adminKey;
       await saveEvent(id, data);
+      saveEventToHistory(id, adminKey, data.title, data.date);
       onCreate(id, adminKey);
     } catch(e) {
       console.error(e);
@@ -713,11 +746,92 @@ function EventView({ eventId, adminKey }) {
   );
 }
 
+// ── MY EVENTS VIEW ──
+function MyEventsView({ onSelect, onNew }) {
+  const [events, setEvents] = useState([]);
+  const [eventData, setEventData] = useState({});
+
+  useEffect(() => {
+    const saved = getSavedEvents();
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const active = saved.filter(e => {
+      if (!e.date) return true;
+      const eventDate = new Date(e.date + "T23:59:59");
+      return eventDate >= today;
+    });
+    setEvents(active);
+
+    // Load attendee counts from Firebase
+    const db = getDb();
+    if (!db) return;
+    active.forEach(ev => {
+      db.collection("events").doc(ev.id).get().then(snap => {
+        if (snap.exists) {
+          const data = snap.data();
+          const confirmed = (data.attendees || []).filter(a => a.status === "confirmed").length;
+          setEventData(prev => ({ ...prev, [ev.id]: { confirmed, cancelled: data.cancelled } }));
+        }
+      }).catch(() => {});
+    });
+  }, []);
+
+  function formatDateShort(dateStr) {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-");
+    const months = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    return `${parseInt(d)} ${months[parseInt(m)-1]}`;
+  }
+
+  return (
+    <div className="my-events">
+      <div className="my-events-header">
+        <div className="label">Mis partidos</div>
+        <h1>TUS<br /><span>EVENTOS</span></h1>
+      </div>
+
+      {events.length === 0 ? (
+        <div className="no-events">
+          <div style={{fontSize:40,marginBottom:12}}>🎾</div>
+          <p>No tenés partidos activos.<br/>Creá uno nuevo.</p>
+        </div>
+      ) : (
+        events.map(ev => {
+          const data = eventData[ev.id] || {};
+          return (
+            <div key={ev.id} className={`event-card ${data.cancelled ? "event-card-cancelled" : ""}`}
+              onClick={() => onSelect(ev.id, ev.adminKey)}>
+              <div className="event-card-title">{data.cancelled ? "❌ " : ""}{ev.title || "Partido de Pádel"}</div>
+              <div className="event-card-meta">
+                <span>📅 {formatDateShort(ev.date)}</span>
+                {data.confirmed !== undefined && (
+                  <span className="event-card-slots">{data.confirmed}/4 jugadores</span>
+                )}
+                {data.cancelled && <span style={{color:"#ff4040"}}>Cancelado</span>}
+              </div>
+            </div>
+          );
+        })
+      )}
+
+      <button className="btn-new-event" onClick={onNew}>+ CREAR NUEVO PARTIDO</button>
+    </div>
+  );
+}
+
 // ── APP ROOT ──
 export default function App() {
   const [screen, setScreen] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("event") ? "event" : "creator";
+    if (params.get("event")) return "event";
+    const saved = getSavedEvents();
+    const today = new Date(); today.setHours(0,0,0,0);
+    const active = saved.filter(e => {
+      if (!e.date) return true;
+      return new Date(e.date + "T23:59:59") >= today;
+    });
+    if (active.length > 0) return "myevents";
+    return "creator";
   });
   const [currentEventId, setCurrentEventId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -741,8 +855,15 @@ export default function App() {
     setScreen("share");
   }
 
+  function handleSelectEvent(id, ak) {
+    setCurrentEventId(id);
+    setAdminKey(ak);
+    setScreen("event");
+  }
+
   return (
     <div className="app">
+      {screen === "myevents" && <MyEventsView onSelect={handleSelectEvent} onNew={() => setScreen("creator")} />}
       {screen === "creator" && <CreatorView onCreate={handleCreate} />}
       {screen === "share" && <ShareView eventId={currentEventId} adminKey={adminKey} onViewEvent={() => setScreen("event")} />}
       {screen === "event" && <EventView eventId={currentEventId} adminKey={adminKey} />}
