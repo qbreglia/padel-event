@@ -118,6 +118,12 @@ const styles = `
   .declined-msg strong { color: #ff6060; font-size: 16px; display: block; margin-bottom: 4px; }
   .loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: #333; letter-spacing: 2px; }
   .countdown { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,200,100,0.1); border: 1px solid rgba(0,200,100,0.2); border-radius: 20px; padding: 6px 14px; font-size: 13px; color: #00c864; font-weight: 500; margin-top: 16px; }
+  .cancelled-banner { background: rgba(255,60,60,0.1); border: 2px solid rgba(255,60,60,0.4); border-radius: 10px; padding: 20px; text-align: center; margin: 20px; }
+  .cancelled-banner .emoji { font-size: 40px; margin-bottom: 8px; }
+  .cancelled-banner h2 { font-family: 'Bebas Neue', sans-serif; font-size: 32px; color: #ff4040; letter-spacing: 1px; margin-bottom: 6px; }
+  .cancelled-banner p { font-size: 14px; color: #888; }
+  .btn-cancel { width: 100%; background: transparent; border: 1px solid #ff4040; border-radius: 10px; padding: 14px; color: #ff4040; font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; margin-top: 10px; }
+  .btn-cancel:hover { background: rgba(255,64,64,0.08); }
 `;
 
 function genId() { return Math.random().toString(36).slice(2, 9); }
@@ -523,6 +529,13 @@ function EventView({ eventId, adminKey }) {
         </div>
         {countdown && <div className="countdown">⏱ {countdown}</div>}
       </div>
+      {event.cancelled && (
+        <div className="cancelled-banner">
+          <div className="emoji">❌</div>
+          <h2>PARTIDO CANCELADO</h2>
+          <p>El organizador canceló este partido.</p>
+        </div>
+      )}
       <div className="slots-section">
         <div className="slots-header">
           <div className="slots-title">JUGADORES</div>
@@ -551,7 +564,7 @@ function EventView({ eventId, adminKey }) {
         )}
         <div className="refreshing">• se actualiza en tiempo real</div>
       </div>
-      <div className="rsvp-section">
+      {!event.cancelled && <div className="rsvp-section">
         <div className="rsvp-title">¿ESTÁS PARA JUGAR?</div>
         {!isAdmin && myResponse === "confirmed" ? (
           <div className="confirmed-msg">
@@ -590,7 +603,7 @@ function EventView({ eventId, adminKey }) {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {isAdmin && (
         <div className="admin-section">
@@ -621,7 +634,16 @@ function EventView({ eventId, adminKey }) {
             </div>
           )}
 
-          <button className="btn-whatsapp" style={{marginBottom:16,fontSize:18,padding:"14px"}} onClick={() => {
+          {!event.cancelled && <button className="btn-cancel" onClick={async () => {
+            if (!window.confirm("¿Cancelar el partido? Todos los invitados verán el evento como cancelado.")) return;
+            const db = getDb();
+            await db.collection("events").doc(eventId).update({ cancelled: true });
+          }}>❌ CANCELAR PARTIDO</button>}
+          {event.cancelled && <button className="btn-cancel" style={{borderColor:"#00c864",color:"#00c864"}} onClick={async () => {
+            const db = getDb();
+            await db.collection("events").doc(eventId).update({ cancelled: false });
+          }}>✅ REACTIVAR PARTIDO</button>}
+          <button className="btn-whatsapp" style={{marginBottom:16,fontSize:18,padding:"14px",marginTop:10}} onClick={() => {
             const base = window.location.origin + window.location.pathname;
             const inviteLink = "https://partido-de-padel.netlify.app/.netlify/functions/preview?event=" + eventId;
             const msg = encodeURIComponent(inviteLink);
