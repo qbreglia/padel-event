@@ -117,6 +117,7 @@ const styles = `
   .declined-msg p { font-size: 14px; color: #666; }
   .declined-msg strong { color: #ff6060; font-size: 16px; display: block; margin-bottom: 4px; }
   .loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: #333; letter-spacing: 2px; }
+  .countdown { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,200,100,0.1); border: 1px solid rgba(0,200,100,0.2); border-radius: 20px; padding: 6px 14px; font-size: 13px; color: #00c864; font-weight: 500; margin-top: 16px; }
 `;
 
 function genId() { return Math.random().toString(36).slice(2, 9); }
@@ -129,6 +130,32 @@ function formatDate(dateStr) {
   const [y, m, d] = dateStr.split("-");
   const months = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   return `${parseInt(d)} de ${months[parseInt(m)-1]} ${y}`;
+}
+
+function useCountdown(dateStr, timeStr) {
+  const [countdown, setCountdown] = useState("");
+  useEffect(() => {
+    if (!dateStr || !timeStr) return;
+    function calc() {
+      const eventDate = new Date(`${dateStr}T${timeStr}:00`);
+      const now = new Date();
+      const diff = eventDate - now;
+      if (diff <= 0) {
+        setCountdown("¡El partido ya comenzó!");
+        return;
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      if (days > 0) setCountdown(`Faltan ${days} día${days !== 1 ? "s" : ""} y ${hours} hora${hours !== 1 ? "s" : ""}`);
+      else if (hours > 0) setCountdown(`Faltan ${hours} hora${hours !== 1 ? "s" : ""} y ${mins} minuto${mins !== 1 ? "s" : ""}`);
+      else setCountdown(`Faltan ${mins} minuto${mins !== 1 ? "s" : ""}`);
+    }
+    calc();
+    const interval = setInterval(calc, 60000);
+    return () => clearInterval(interval);
+  }, [dateStr, timeStr]);
+  return countdown;
 }
 
 function getDb() { return window.db; }
@@ -476,6 +503,7 @@ function EventView({ eventId, adminKey }) {
   const confirmed = attendees.filter(a => a.status === "confirmed");
   const declined = attendees.filter(a => a.status === "declined");
   const full = confirmed.length >= MAX_PLAYERS;
+  const countdown = useCountdown(event?.date, event?.timeStart);
 
   return (
     <div className="event-view">
@@ -493,6 +521,7 @@ function EventView({ eventId, adminKey }) {
             <div className="meta-row"><div className="meta-icon">💬</div><span style={{ color: "#888", fontSize: 13 }}>{event.description}</span></div>
           )}
         </div>
+        {countdown && <div className="countdown">⏱ {countdown}</div>}
       </div>
       <div className="slots-section">
         <div className="slots-header">
