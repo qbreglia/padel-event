@@ -176,6 +176,17 @@ function saveEventToHistory(id, adminKey, title, date) {
   } catch(e) {}
 }
 
+function saveEventAsGuest(id, title, date) {
+  try {
+    const events = getSavedEvents();
+    const existing = events.findIndex(e => e.id === id);
+    if (existing >= 0) return; // already saved (maybe as organizer)
+    const entry = { id, adminKey: null, title, date, isGuest: true, createdAt: Date.now() };
+    events.unshift(entry);
+    localStorage.setItem('padel_my_events', JSON.stringify(events.slice(0, 20)));
+  } catch(e) {}
+}
+
 async function saveEvent(id, data) {
   const db = getDb();
   if (!db) throw new Error("Firebase no disponible");
@@ -529,6 +540,7 @@ function EventView({ eventId, adminKey }) {
         try {
           localStorage.setItem(`padel_name_${eventId}`, name.trim());
           localStorage.setItem(`padel_response_${eventId}`, status);
+          if (event) saveEventAsGuest(eventId, event.title, event.date);
         } catch(e) {}
       }
     } catch(e) { console.error(e); }
@@ -758,11 +770,10 @@ function MyEventsView({ onSelect, onNew }) {
     const active = saved.filter(e => {
       if (!e.date) return true;
       const eventDate = new Date(e.date + "T23:59:59");
-      return eventDate >= today;
+      return eventDate >= today && !e.cancelled;
     });
     setEvents(active);
 
-    // Load attendee counts from Firebase
     const db = getDb();
     if (!db) return;
     active.forEach(ev => {
@@ -783,6 +794,35 @@ function MyEventsView({ onSelect, onNew }) {
     return `${parseInt(d)} ${months[parseInt(m)-1]}`;
   }
 
+  const myEvents = events.filter(e => !e.isGuest);
+  const guestEvents = events.filter(e => e.isGuest);
+
+  function EventCard({ ev }) {
+    const data = eventData[ev.id] || {};
+    if (data.cancelled) return null;
+    return (
+      <div className="event-card" onClick={() => onSelect(ev.id, ev.adminKey)}>
+        <div className="event-card-title">{ev.title || "Partido de Pádel"}</div>
+        <div className="event-card-meta">
+          <span>📅 {formatDateShort(ev.date)}</span>
+          {data.confirmed !== undefined && (
+            <span className="event-card-slots">{data.confirmed}/4 jugadores</span>
+          )}
+          {ev.isGuest && (() => {
+            try {
+              const resp = localStorage.getItem(`padel_response_${ev.id}`);
+              if (resp === "confirmed") return <span style={{color:"#00c864"}}>✅ Voy</span>;
+              if (resp === "declined") return <span style={{color:"#ff6060"}}>❌ No puedo</span>;
+            } catch(e) {}
+            return null;
+          })()}
+        </div>
+      </div>
+    );
+  }
+
+  const hasEvents = myEvents.length > 0 || guestEvents.length > 0;
+
   return (
     <div className="my-events">
       <div className="my-events-header">
@@ -790,31 +830,28 @@ function MyEventsView({ onSelect, onNew }) {
         <h1>TUS<br /><span>EVENTOS</span></h1>
       </div>
 
-      {events.length === 0 ? (
+      {!hasEvents && (
         <div className="no-events">
           <div style={{fontSize:40,marginBottom:12}}>🎾</div>
           <p>No tenés partidos activos.<br/>Creá uno nuevo.</p>
         </div>
-      ) : (
-        events.map(ev => {
-          const data = eventData[ev.id] || {};
-          return (
-            <div key={ev.id} className={`event-card ${data.cancelled ? "event-card-cancelled" : ""}`}
-              onClick={() => onSelect(ev.id, ev.adminKey)}>
-              <div className="event-card-title">{data.cancelled ? "❌ " : ""}{ev.title || "Partido de Pádel"}</div>
-              <div className="event-card-meta">
-                <span>📅 {formatDateShort(ev.date)}</span>
-                {data.confirmed !== undefined && (
-                  <span className="event-card-slots">{data.confirmed}/4 jugadores</span>
-                )}
-                {data.cancelled && <span style={{color:"#ff4040"}}>Cancelado</span>}
-              </div>
-            </div>
-          );
-        })
       )}
 
-      <button className="btn-new-event" onClick={onNew}>+ CREAR NUEVO PARTIDO</button>
+      {myEvents.length > 0 && (
+        <>
+          <div className="section-label" style={{marginBottom:10}}>ORGANIZADOR</div>
+          {myEvents.map(ev => <EventCard key={ev.id} ev={ev} />)}
+        </>
+      )}
+
+      {guestEvents.length > 0 && (
+        <>
+          <div className="section-label" style={{marginTop:20,marginBottom:10}}>INVITADO</div>
+          {guestEvents.map(ev => <EventCard key={ev.id} ev={ev} />)}
+        </>
+      )}
+
+      <button className="btn-new-event" onClick={onNew} style={{marginTop:20}}>+ CREAR NUEVO PARTIDO</button>
     </div>
   );
 }
