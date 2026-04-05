@@ -140,6 +140,14 @@ const styles = `
   .btn-new-event { width: 100%; background: #00c864; color: #000; border: none; border-radius: 10px; padding: 18px; font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 1.5px; cursor: pointer; transition: opacity 0.2s; margin-top: 8px; }
   .btn-new-event:hover { opacity: 0.9; }
   .no-events { text-align: center; padding: 40px 20px; color: #444; font-size: 15px; }
+  .paste-link-section { margin-top: 20px; }
+  .paste-link-label { font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: #555; margin-bottom: 8px; }
+  .paste-link-row { display: flex; gap: 8px; }
+  .paste-link-input { flex: 1; background: #141414; border: 1px solid #222; border-radius: 10px; padding: 14px 16px; color: #f0f0f0; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
+  .paste-link-input:focus { border-color: #00c864; }
+  .paste-link-input::placeholder { color: #444; }
+  .btn-paste { background: #00c864; color: #000; border: none; border-radius: 10px; padding: 14px 18px; font-family: 'Bebas Neue', sans-serif; font-size: 16px; cursor: pointer; white-space: nowrap; }
+  .btn-paste:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
 
 function genId() { return Math.random().toString(36).slice(2, 9); }
@@ -771,6 +779,8 @@ function EventView({ eventId, adminKey }) {
 function MyEventsView({ onSelect, onNew }) {
   const [events, setEvents] = useState([]);
   const [eventData, setEventData] = useState({});
+  const [pasteLink, setPasteLink] = useState("");
+  const [pasteError, setPasteError] = useState("");
 
   useEffect(() => {
     const saved = getSavedEvents();
@@ -832,6 +842,20 @@ function MyEventsView({ onSelect, onNew }) {
 
   const hasEvents = myEvents.length > 0 || guestEvents.length > 0;
 
+  function handlePasteLink() {
+    setPasteError("");
+    try {
+      const url = new URL(pasteLink.trim());
+      const eventId = url.searchParams.get("event");
+      if (!eventId) { setPasteError("Link inválido"); return; }
+      const adminKey = url.searchParams.get("admin") || null;
+      onSelect(eventId, adminKey);
+      setPasteLink("");
+    } catch(e) {
+      setPasteError("Link inválido — pegá el link completo");
+    }
+  }
+
   return (
     <div className="my-events">
       <div className="my-events-header">
@@ -859,6 +883,21 @@ function MyEventsView({ onSelect, onNew }) {
           {guestEvents.map(ev => <EventCard key={ev.id} ev={ev} />)}
         </>
       )}
+
+      <div className="paste-link-section">
+        <div className="paste-link-label">🔗 Pegar link de invitación</div>
+        <div className="paste-link-row">
+          <input
+            className="paste-link-input"
+            placeholder="Pegá el link que te mandaron..."
+            value={pasteLink}
+            onChange={e => { setPasteLink(e.target.value); setPasteError(""); }}
+            onKeyDown={e => e.key === "Enter" && handlePasteLink()}
+          />
+          <button className="btn-paste" onClick={handlePasteLink} disabled={!pasteLink.trim()}>IR</button>
+        </div>
+        {pasteError && <div style={{fontSize:12,color:"#ff6060",marginTop:6}}>{pasteError}</div>}
+      </div>
 
       <button className="btn-new-event" onClick={onNew} style={{marginTop:20}}>+ CREAR NUEVO PARTIDO</button>
     </div>
