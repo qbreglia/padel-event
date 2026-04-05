@@ -124,6 +124,8 @@ const styles = `
   .cancelled-banner p { font-size: 14px; color: #888; }
   .btn-cancel { width: 100%; background: transparent; border: 1px solid #ff4040; border-radius: 10px; padding: 14px; color: #ff4040; font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; margin-top: 10px; }
   .btn-cancel:hover { background: rgba(255,64,64,0.08); }
+  .btn-calendar { width: 100%; background: transparent; border: 1px solid #4a90d9; border-radius: 10px; padding: 14px; color: #4a90d9; font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .btn-calendar:hover { background: rgba(74,144,217,0.08); }
 `;
 
 function genId() { return Math.random().toString(36).slice(2, 9); }
@@ -442,6 +444,45 @@ function EventView({ eventId, adminKey }) {
     return () => unsub();
   }, [eventId]);
 
+  function addToCalendar(evt) {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isMac = navigator.platform.toUpperCase().includes('MAC') && navigator.maxTouchPoints === 0;
+    const title = encodeURIComponent(evt.title || "Partido de Pádel");
+    const location = encodeURIComponent(evt.location || "");
+    
+    if (isIOS || isMac) {
+      // Apple Calendar via .ics
+      const startDate = evt.date ? evt.date.replace(/-/g, "") : "";
+      const startTime = evt.timeStart ? evt.timeStart.replace(":", "") + "00" : "000000";
+      const endTime = evt.timeEnd ? evt.timeEnd.replace(":", "") + "00" : "020000";
+      const icsContent = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "BEGIN:VEVENT",
+        `DTSTART:${startDate}T${startTime}`,
+        `DTEND:${startDate}T${endTime}`,
+        `SUMMARY:${evt.title || "Partido de Pádel"}`,
+        `LOCATION:${evt.location || ""}`,
+        "END:VEVENT",
+        "END:VCALENDAR"
+      ].join("\n");
+      const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "partido-padel.ics";
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      // Google Calendar
+      const startDate = evt.date ? evt.date.replace(/-/g, "") : "";
+      const startTime = evt.timeStart ? evt.timeStart.replace(":", "") + "00" : "000000";
+      const endTime = evt.timeEnd ? evt.timeEnd.replace(":", "") + "00" : "020000";
+      const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDate}T${startTime}/${startDate}T${endTime}&location=${location}`;
+      window.open(url, "_blank");
+    }
+  }
+
   async function respond(status) {
     if (!name.trim() || confirming) return;
     setConfirming(true);
@@ -571,6 +612,9 @@ function EventView({ eventId, adminKey }) {
             <div className="emoji">✅</div>
             <strong>¡Confirmado, {myName}!</strong>
             <p style={{marginBottom:12}}>Ya estás en el partido.</p>
+            <button className="btn-calendar" onClick={() => addToCalendar(event)}>
+              📅 Agregar al calendario
+            </button>
             <button className="btn-decline" onClick={() => changeResponse("declined")} disabled={changingResponse}
               style={{width:"100%",marginTop:8}}>
               {changingResponse ? "..." : "Cambiar — no puedo ir"}
