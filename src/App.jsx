@@ -377,10 +377,15 @@ function EventView({ eventId, adminKey }) {
   const [event, setEvent] = useState(null);
   const [attendees, setAttendees] = useState([]);
   const [name, setName] = useState("");
-  const [myName, setMyName] = useState(null);
-  const [myResponse, setMyResponse] = useState(null);
+  const [myName, setMyName] = useState(() => {
+    try { return localStorage.getItem(`padel_name_${eventId}`) || null; } catch(e) { return null; }
+  });
+  const [myResponse, setMyResponse] = useState(() => {
+    try { return localStorage.getItem(`padel_response_${eventId}`) || null; } catch(e) { return null; }
+  });
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [changingResponse, setChangingResponse] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
@@ -414,9 +419,31 @@ function EventView({ eventId, adminKey }) {
       } else {
         setMyName(name.trim());
         setMyResponse(status);
+        try {
+          localStorage.setItem(`padel_name_${eventId}`, name.trim());
+          localStorage.setItem(`padel_response_${eventId}`, status);
+        } catch(e) {}
       }
     } catch(e) { console.error(e); }
     setConfirming(false);
+  }
+
+  async function changeResponse(newStatus) {
+    setChangingResponse(true);
+    try {
+      const db = getDb();
+      const snap = await db.collection("events").doc(eventId).get();
+      const current = snap.data().attendees || [];
+      // Remove old response from this user and add new one
+      const filtered = current.filter(a => a.name !== myName || a.isOrganizer);
+      const updated = [...filtered, { name: myName, isOrganizer: false, status: newStatus, at: Date.now() }];
+      await db.collection("events").doc(eventId).update({ attendees: updated });
+      setMyResponse(newStatus);
+      try {
+        localStorage.setItem(`padel_response_${eventId}`, newStatus);
+      } catch(e) {}
+    } catch(e) { console.error(e); }
+    setChangingResponse(false);
   }
 
   async function removeAttendee(idx) {
@@ -501,13 +528,21 @@ function EventView({ eventId, adminKey }) {
           <div className="confirmed-msg">
             <div className="emoji">✅</div>
             <strong>¡Confirmado, {myName}!</strong>
-            <p>Ya estás en el partido.</p>
+            <p style={{marginBottom:12}}>Ya estás en el partido.</p>
+            <button className="btn-decline" onClick={() => changeResponse("declined")} disabled={changingResponse}
+              style={{width:"100%",marginTop:8}}>
+              {changingResponse ? "..." : "Cambiar — no puedo ir"}
+            </button>
           </div>
         ) : !isAdmin && myResponse === "declined" ? (
           <div className="declined-msg">
             <div className="emoji">😔</div>
             <strong>Avisaste que no podés, {myName}.</strong>
-            <p>Los demás lo saben.</p>
+            <p style={{marginBottom:12}}>Los demás lo saben.</p>
+            <button className="btn-confirm" onClick={() => changeResponse("confirmed")} disabled={changingResponse}
+              style={{width:"100%",marginTop:8,opacity: (attendees.filter(a=>a.status==="confirmed").length >= MAX_PLAYERS ? 0.4 : 1)}}>
+              {changingResponse ? "..." : attendees.filter(a=>a.status==="confirmed").length >= MAX_PLAYERS ? "Partido completo" : "Cambiar — sí puedo ir"}
+            </button>
           </div>
         ) : (
           <div className="rsvp-input">
