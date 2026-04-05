@@ -390,6 +390,11 @@ function EventView({ eventId, adminKey }) {
   const [confirming, setConfirming] = useState(false);
   const [changingResponse, setChangingResponse] = useState(false);
   const [countdown, setCountdown] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(false);
+  const MAX_PLAYERS = 4;
 
   useEffect(() => {
     function calcCountdown(dateStr, timeStr) {
@@ -413,11 +418,6 @@ function EventView({ eventId, adminKey }) {
     const interval = setInterval(() => setCountdown(calcCountdown(event.date, event.timeStart)), 60000);
     return () => clearInterval(interval);
   }, [event]);
-  const [editMode, setEditMode] = useState(false);
-  const [editForm, setEditForm] = useState({});
-  const [saving, setSaving] = useState(false);
-  const [savedMsg, setSavedMsg] = useState(false);
-  const MAX_PLAYERS = 4;
 
   const isAdmin = adminKey && event && event.adminKey === adminKey;
 
