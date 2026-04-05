@@ -136,24 +136,29 @@ function useCountdown(dateStr, timeStr) {
   const [countdown, setCountdown] = useState("");
   useEffect(() => {
     if (!dateStr || !timeStr) return;
-    function calc() {
-      const eventDate = new Date(`${dateStr}T${timeStr}:00`);
-      const now = new Date();
-      const diff = eventDate - now;
-      if (diff <= 0) {
-        setCountdown("¡El partido ya comenzó!");
-        return;
+    try {
+      function calc() {
+        try {
+          const eventDate = new Date(`${dateStr}T${timeStr}:00`);
+          if (isNaN(eventDate.getTime())) return;
+          const now = new Date();
+          const diff = eventDate - now;
+          if (diff <= 0) {
+            setCountdown("¡El partido ya comenzó!");
+            return;
+          }
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          if (days > 0) setCountdown(`Faltan ${days} día${days !== 1 ? "s" : ""} y ${hours} hora${hours !== 1 ? "s" : ""}`);
+          else if (hours > 0) setCountdown(`Faltan ${hours} hora${hours !== 1 ? "s" : ""} y ${mins} minuto${mins !== 1 ? "s" : ""}`);
+          else setCountdown(`Faltan ${mins} minuto${mins !== 1 ? "s" : ""}`);
+        } catch(e) {}
       }
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      if (days > 0) setCountdown(`Faltan ${days} día${days !== 1 ? "s" : ""} y ${hours} hora${hours !== 1 ? "s" : ""}`);
-      else if (hours > 0) setCountdown(`Faltan ${hours} hora${hours !== 1 ? "s" : ""} y ${mins} minuto${mins !== 1 ? "s" : ""}`);
-      else setCountdown(`Faltan ${mins} minuto${mins !== 1 ? "s" : ""}`);
-    }
-    calc();
-    const interval = setInterval(calc, 60000);
-    return () => clearInterval(interval);
+      calc();
+      const interval = setInterval(calc, 60000);
+      return () => clearInterval(interval);
+    } catch(e) {}
   }, [dateStr, timeStr]);
   return countdown;
 }
