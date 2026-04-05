@@ -482,6 +482,12 @@ function EventView({ eventId, adminKey }) {
         setEvent(data);
         setAttendees(data.attendees || []);
         setEditForm({ title: data.title, date: data.date, timeStart: data.timeStart, timeEnd: data.timeEnd, location: data.location, placeId: data.placeId || null, description: data.description || "" });
+        // Save to history when opening any event
+        if (adminKey && data.adminKey === adminKey) {
+          saveEventToHistory(eventId, adminKey, data.title, data.date);
+        } else {
+          saveEventAsGuest(eventId, data.title, data.date);
+        }
       }
       setLoading(false);
     });
@@ -723,6 +729,9 @@ function EventView({ eventId, adminKey }) {
             </div>
           )}
 
+          <button className="btn-calendar" onClick={() => addToCalendar(event)} style={{marginBottom:8}}>
+            📅 Agregar al calendario
+          </button>
           {!event.cancelled && <button className="btn-cancel" onClick={async () => {
             if (!window.confirm("¿Cancelar el partido? Todos los invitados verán el evento como cancelado.")) return;
             const db = getDb();
