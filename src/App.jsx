@@ -735,7 +735,18 @@ function EventView({ eventId, adminKey }) {
                 <div className="admin-player-name">{p.name} {p.isOrganizer ? "👑" : ""}</div>
                 <div className="admin-player-status">{p.status === "confirmed" ? "✅ Confirmado" : "❌ No puede"}</div>
               </div>
-              <button className="btn-remove" onClick={() => removeAttendee(i)}>Eliminar</button>
+              <div style={{display:"flex",gap:6}}>
+                <button className="btn-remove" style={{color: p.status === "confirmed" ? "#ff6060" : "#00c864", borderColor: p.status === "confirmed" ? "#333" : "#333"}}
+                  onClick={async () => {
+                    const db = getDb();
+                    const updated = [...attendees];
+                    updated[i] = { ...updated[i], status: p.status === "confirmed" ? "declined" : "confirmed" };
+                    await db.collection("events").doc(eventId).update({ attendees: updated });
+                  }}>
+                  {p.status === "confirmed" ? "→ No puedo" : "→ Voy"}
+                </button>
+                <button className="btn-remove" onClick={() => removeAttendee(i)}>Eliminar</button>
+              </div>
             </div>
           ))}
           {attendees.length === 0 && <div style={{fontSize:13,color:"#444"}}>Sin respuestas aún</div>}
