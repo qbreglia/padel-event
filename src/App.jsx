@@ -782,6 +782,12 @@ function EventView({ eventId, adminKey, onBack }) {
               style={{width:"100%",marginTop:8}}>
               {changingResponse ? "..." : "Cambiar — no puedo ir"}
             </button>
+            <button onClick={() => {
+              const shareLink = "https://padel-event-green.vercel.app/api/preview?event=" + eventId;
+              window.open("https://wa.me/?text=" + encodeURIComponent(shareLink), "_blank");
+            }} style={{width:"100%",marginTop:8,background:"transparent",border:"1px solid #25D366",borderRadius:10,padding:"12px",color:"#25D366",fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:1,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              📤 Invitar a un amigo
+            </button>
           </div>
         ) : !isAdmin && myResponse === "declined" ? (
           <div className="declined-msg">
@@ -791,6 +797,12 @@ function EventView({ eventId, adminKey, onBack }) {
             <button className="btn-confirm" onClick={() => changeResponse("confirmed")} disabled={changingResponse}
               style={{width:"100%",marginTop:8,opacity: (attendees.filter(a=>a.status==="confirmed").length >= MAX_PLAYERS ? 0.4 : 1)}}>
               {changingResponse ? "..." : attendees.filter(a=>a.status==="confirmed").length >= MAX_PLAYERS ? "Partido completo" : "Cambiar — sí puedo ir"}
+            </button>
+            <button onClick={() => {
+              const shareLink = "https://padel-event-green.vercel.app/api/preview?event=" + eventId;
+              window.open("https://wa.me/?text=" + encodeURIComponent(shareLink), "_blank");
+            }} style={{width:"100%",marginTop:8,background:"transparent",border:"1px solid #25D366",borderRadius:10,padding:"12px",color:"#25D366",fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:1,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              📤 Invitar a un amigo
             </button>
           </div>
         ) : (
