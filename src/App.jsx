@@ -361,7 +361,9 @@ function LocationField({ value, onChange, initialPlaceId }) {
 function CreatorView({ onCreate }) {
   const [form, setForm] = useState({ title: "", description: "", date: "", timeStart: "", timeEnd: "", location: "", placeId: null });
   const [includeOrganizer, setIncludeOrganizer] = useState(true);
-  const [organizerName, setOrganizerName] = useState("");
+  const [organizerName, setOrganizerName] = useState(() => {
+    try { return localStorage.getItem('padel_last_name') || ""; } catch(e) { return ""; }
+  });
   const [loading, setLoading] = useState(false);
   const [mapsReady, setMapsReady] = useState(false);
 
@@ -484,7 +486,6 @@ function CreatorView({ onCreate }) {
 function ShareView({ eventId, adminKey, onViewEvent }) {
   const [copied, setCopied] = useState(false);
   const base = `${window.location.origin}`;
-  const link = `${base}/?event=${eventId}`;
   const shareLink = `https://padel-event-green.vercel.app/api/preview?event=${eventId}`;
   const adminLink = `${base}/?event=${eventId}&admin=${adminKey}`;
 
@@ -523,11 +524,15 @@ function ShareView({ eventId, adminKey, onViewEvent }) {
 }
 
 // ── EVENT VIEW ──
-function EventView({ eventId, adminKey }) {
+function EventView({ eventId, adminKey, onBack }) {
   const [event, setEvent] = useState(null);
   const [attendees, setAttendees] = useState([]);
   const [name, setName] = useState(() => {
-    try { return localStorage.getItem('padel_last_name') || ""; } catch(e) { return ""; }
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("admin")) return "";
+      return localStorage.getItem('padel_last_name') || "";
+    } catch(e) { return ""; }
   });
   const [myName, setMyName] = useState(() => {
     try { return localStorage.getItem(`padel_name_${eventId}`) || null; } catch(e) { return null; }
@@ -696,6 +701,7 @@ function EventView({ eventId, adminKey }) {
   return (
     <div className="event-view">
       <div className="event-hero">
+        {onBack && <button onClick={onBack} style={{background:"transparent",border:"none",color:"#00c864",fontSize:14,cursor:"pointer",marginBottom:12,padding:0,display:"flex",alignItems:"center",gap:4}}>← Mis eventos</button>}
         <div className="event-badge">🎾 Pádel</div>
         <div className="event-title">{event.title}</div>
         <div className="event-meta">
@@ -725,7 +731,7 @@ function EventView({ eventId, adminKey }) {
         </div>
         <div className="slots-grid">
           {Array.from({ length: MAX_PLAYERS }, (_, i) => confirmed[i] || null).map((player, i) => (
-            <div className={`slot ${player ? "just-filled" : "empty-pulse"}`} key={i}>
+            <div className={`slot ${player ? "filled just-filled" : "empty-pulse"}`} key={i}>
               <div className="slot-number">{i + 1}</div>
               {player ? (
                 <div>
@@ -907,9 +913,16 @@ function EventView({ eventId, adminKey }) {
                   onClick={async () => {
                     const db = getDb();
                     const updated = [...attendees];
-                    updated[i] = { ...updated[i], status: p.status === "confirmed" ? "declined" : "confirmed" };
-                    await db.collection("events").doc(eventId).update({ attendees: updated });
-                    if (p.status === "confirmed") await promoteFromWaitlist(eventId);
+                    if (p.status === "confirmed") {
+                      updated[i] = { ...updated[i], status: "declined" };
+                      await db.collection("events").doc(eventId).update({ attendees: updated });
+                      await promoteFromWaitlist(eventId);
+                    } else {
+                      const currentConfirmed = attendees.filter(a => a.status === "confirmed").length;
+                      const newStatus = (p.status === "waitlist" && currentConfirmed >= MAX_PLAYERS) ? "waitlist" : "confirmed";
+                      updated[i] = { ...updated[i], status: newStatus };
+                      await db.collection("events").doc(eventId).update({ attendees: updated });
+                    }
                   }}>
                   {p.status === "confirmed" ? "→ No puedo" : p.status === "waitlist" ? "→ Confirmar" : "→ Voy"}
                 </button>
@@ -1111,7 +1124,7 @@ export default function App() {
       {screen === "myevents" && <MyEventsView onSelect={handleSelectEvent} onNew={() => setScreen("creator")} />}
       {screen === "creator" && <CreatorView onCreate={handleCreate} />}
       {screen === "share" && <ShareView eventId={currentEventId} adminKey={adminKey} onViewEvent={() => setScreen("event")} />}
-      {screen === "event" && <EventView eventId={currentEventId} adminKey={adminKey} />}
+      {screen === "event" && <EventView eventId={currentEventId} adminKey={adminKey} onBack={currentEventId ? () => setScreen("myevents") : null} />}
     </div>
   );
 }
