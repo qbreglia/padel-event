@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const GOOGLE_FONTS = `@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');`;
 
@@ -479,8 +479,6 @@ function EventView({ eventId, adminKey }) {
     return () => clearInterval(interval);
   }, [event]);
 
-  const isAdmin = adminKey && event && event.adminKey === adminKey;
-
   useEffect(() => {
     const db = getDb();
     if (!db) { setLoading(false); return; }
@@ -503,42 +501,13 @@ function EventView({ eventId, adminKey }) {
   }, [eventId]);
 
   function addToCalendar(evt) {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isMac = navigator.platform.toUpperCase().includes('MAC') && navigator.maxTouchPoints === 0;
     const title = encodeURIComponent(evt.title || "Partido de Pádel");
     const location = encodeURIComponent(evt.location || "");
-    
-    if (isIOS || isMac) {
-      // Apple Calendar via .ics
-      const startDate = evt.date ? evt.date.replace(/-/g, "") : "";
-      const startTime = evt.timeStart ? evt.timeStart.replace(":", "") + "00" : "000000";
-      const endTime = evt.timeEnd ? evt.timeEnd.replace(":", "") + "00" : "020000";
-      const icsContent = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "BEGIN:VEVENT",
-        `DTSTART:${startDate}T${startTime}`,
-        `DTEND:${startDate}T${endTime}`,
-        `SUMMARY:${evt.title || "Partido de Pádel"}`,
-        `LOCATION:${evt.location || ""}`,
-        "END:VEVENT",
-        "END:VCALENDAR"
-      ].join("\n");
-      const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "partido-padel.ics";
-      a.click();
-      URL.revokeObjectURL(url);
-    } else {
-      // Google Calendar
-      const startDate = evt.date ? evt.date.replace(/-/g, "") : "";
-      const startTime = evt.timeStart ? evt.timeStart.replace(":", "") + "00" : "000000";
-      const endTime = evt.timeEnd ? evt.timeEnd.replace(":", "") + "00" : "020000";
-      const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDate}T${startTime}/${startDate}T${endTime}&location=${location}`;
-      window.open(url, "_blank");
-    }
+    const startDate = evt.date ? evt.date.replace(/-/g, "") : "";
+    const startTime = evt.timeStart ? evt.timeStart.replace(":", "") + "00" : "000000";
+    const endTime = evt.timeEnd ? evt.timeEnd.replace(":", "") + "00" : "020000";
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDate}T${startTime}/${startDate}T${endTime}&location=${location}`;
+    window.open(url, "_blank");
   }
 
   async function respond(status) {
@@ -606,6 +575,7 @@ function EventView({ eventId, adminKey }) {
   if (loading) return <div className="loading">CARGANDO...</div>;
   if (!event) return <div className="loading">EVENTO NO ENCONTRADO</div>;
 
+  const isAdmin = !!(adminKey && event && event.adminKey === adminKey);
   const confirmed = attendees.filter(a => a.status === "confirmed");
   const declined = attendees.filter(a => a.status === "declined");
   const full = confirmed.length >= MAX_PLAYERS;
@@ -845,11 +815,13 @@ function MyEventsView({ onSelect, onNew }) {
   function handlePasteLink() {
     setPasteError("");
     try {
-      const url = new URL(pasteLink.trim());
+      const trimmed = pasteLink.trim();
+      const url = new URL(trimmed);
+      // Accept both app URL (?event=xxx) and preview URL (/api/preview?event=xxx)
       const eventId = url.searchParams.get("event");
-      if (!eventId) { setPasteError("Link inválido"); return; }
-      const adminKey = url.searchParams.get("admin") || null;
-      onSelect(eventId, adminKey);
+      if (!eventId) { setPasteError("Link inválido — pegá el link completo"); return; }
+      const ak = url.searchParams.get("admin") || null;
+      onSelect(eventId, ak);
       setPasteLink("");
     } catch(e) {
       setPasteError("Link inválido — pegá el link completo");
