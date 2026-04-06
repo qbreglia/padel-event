@@ -782,11 +782,12 @@ function EventView({ eventId, adminKey, onBack }) {
               style={{width:"100%",marginTop:8}}>
               {changingResponse ? "..." : "Cambiar — no puedo ir"}
             </button>
-            <button onClick={() => {
+            <button className="btn-whatsapp" onClick={() => {
               const shareLink = "https://padel-event-green.vercel.app/api/preview?event=" + eventId;
               window.open("https://wa.me/?text=" + encodeURIComponent(shareLink), "_blank");
-            }} style={{width:"100%",marginTop:8,background:"transparent",border:"1px solid #25D366",borderRadius:10,padding:"12px",color:"#25D366",fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:1,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-              📤 Invitar a un amigo
+            }} style={{marginTop:8,fontSize:18,padding:"14px"}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.104.549 4.078 1.508 5.793L0 24l6.375-1.493A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.37l-.36-.214-3.732.874.944-3.641-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
+              COMPARTIR INVITACIÓN
             </button>
           </div>
         ) : !isAdmin && myResponse === "declined" ? (
@@ -798,11 +799,12 @@ function EventView({ eventId, adminKey, onBack }) {
               style={{width:"100%",marginTop:8,opacity: (attendees.filter(a=>a.status==="confirmed").length >= MAX_PLAYERS ? 0.4 : 1)}}>
               {changingResponse ? "..." : attendees.filter(a=>a.status==="confirmed").length >= MAX_PLAYERS ? "Partido completo" : "Cambiar — sí puedo ir"}
             </button>
-            <button onClick={() => {
+            <button className="btn-whatsapp" onClick={() => {
               const shareLink = "https://padel-event-green.vercel.app/api/preview?event=" + eventId;
               window.open("https://wa.me/?text=" + encodeURIComponent(shareLink), "_blank");
-            }} style={{width:"100%",marginTop:8,background:"transparent",border:"1px solid #25D366",borderRadius:10,padding:"12px",color:"#25D366",fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:1,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-              📤 Invitar a un amigo
+            }} style={{marginTop:8,fontSize:18,padding:"14px"}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.104.549 4.078 1.508 5.793L0 24l6.375-1.493A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.007-1.37l-.36-.214-3.732.874.944-3.641-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
+              COMPARTIR INVITACIÓN
             </button>
           </div>
         ) : (
