@@ -118,6 +118,20 @@ const styles = `
   .declined-msg strong { color: #ff6060; font-size: 16px; display: block; margin-bottom: 4px; }
   .loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: #333; letter-spacing: 2px; }
   .countdown { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,200,100,0.1); border: 1px solid rgba(0,200,100,0.2); border-radius: 20px; padding: 6px 14px; font-size: 13px; color: #00c864; font-weight: 500; margin-top: 16px; }
+  .slot.empty-pulse { animation: borderPulse 1.8s ease-in-out infinite; }
+  @keyframes borderPulse { 0%, 100% { border-color: #222; border-width: 1px; } 50% { border-color: rgba(0,200,100,0.5); border-width: 2px; } }
+  .slot.just-filled { animation: fillPulse 1.8s ease-in-out; }
+  @keyframes fillPulse { 0%, 100% { border-color: rgba(0,200,100,0.3); } 50% { border-color: #00c864; border-width: 2px; box-shadow: 0 0 10px rgba(0,200,100,0.3); } }
+  .btn-confirm.bounce { animation: btnBounce 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+  @keyframes btnBounce { 0% { transform: scale(1); } 20% { transform: scale(0.88); } 50% { transform: scale(1.15); } 70% { transform: scale(0.96); } 100% { transform: scale(1); } }
+  .particle { position: fixed; pointer-events: none; z-index: 9999; border-radius: 3px; }
+  .waitlist-list { margin-top: 16px; padding-top: 16px; border-top: 1px solid #1a1a1a; }
+  .waitlist-title { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #666; margin-bottom: 10px; }
+  .waitlist-item { font-size: 14px; color: #666; padding: 6px 0; border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; gap: 8px; }
+  .waitlist-item:last-child { border-bottom: none; }
+  .progress-bar-wrap { height: 4px; background: #222; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: #00c864; border-radius: 2px; transition: width 0.4s ease; }
+  .admin-player-time { font-size: 11px; color: #444; margin-top: 2px; }
   .cancelled-banner { background: rgba(255,60,60,0.1); border: 2px solid rgba(255,60,60,0.4); border-radius: 10px; padding: 20px; text-align: center; margin: 20px; }
   .cancelled-banner .emoji { font-size: 40px; margin-bottom: 8px; }
   .cancelled-banner h2 { font-family: 'Bebas Neue', sans-serif; font-size: 32px; color: #ff4040; letter-spacing: 1px; margin-bottom: 6px; }
@@ -166,6 +180,44 @@ function formatDate(dateStr) {
 
 function getDb() { return window.db; }
 
+function launchConfetti() {
+  const colors = ['#00c864','#ffffff','#00ff88','#ffdd00','#ff4444','#44aaff','#ff88cc','#ffaa00'];
+  for (let i = 0; i < 90; i++) {
+    setTimeout(() => {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      const size = 4 + Math.random() * 7;
+      p.style.width = size + 'px';
+      p.style.height = size + 'px';
+      p.style.background = colors[Math.floor(Math.random() * colors.length)];
+      p.style.borderRadius = Math.random() > 0.4 ? '50%' : '3px';
+      const startX = Math.random() * window.innerWidth;
+      p.style.left = startX + 'px';
+      p.style.top = '-20px';
+      const driftX = (Math.random() - 0.5) * 200;
+      const fallY = window.innerHeight + 60;
+      const rotation = Math.random() * 720 - 360;
+      const duration = 1.2 + Math.random() * 1.0;
+      p.style.transition = 'transform ' + duration + 's ease-in, opacity ' + (duration * 0.8) + 's ease-in';
+      p.style.opacity = '1';
+      document.body.appendChild(p);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        p.style.transform = 'translate(' + driftX + 'px, ' + fallY + 'px) rotate(' + rotation + 'deg)';
+        p.style.opacity = '0';
+      }));
+      setTimeout(() => p.remove(), duration * 1000 + 100);
+    }, i * 10);
+  }
+}
+
+function formatTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  return h + ':' + m;
+}
+
 function getSavedEvents() {
   try {
     const saved = localStorage.getItem('padel_my_events');
@@ -208,15 +260,29 @@ async function addAttendee(id, attendee) {
   const snap = await ref.get();
   if (!snap.exists) return;
   const current = snap.data().attendees || [];
-  const confirmed = current.filter(a => a.status === "confirmed");
-  if (attendee.status === "confirmed" && confirmed.length >= 4) return;
   await ref.update({ attendees: [...current, attendee] });
 }
 
+async function promoteFromWaitlist(id) {
+  const db = getDb();
+  if (!db) return;
+  const ref = db.collection("events").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const attendees = snap.data().attendees || [];
+  const confirmed = attendees.filter(a => a.status === "confirmed");
+  if (confirmed.length >= 4) return;
+  const waitlistIdx = attendees.findIndex(a => a.status === "waitlist");
+  if (waitlistIdx < 0) return;
+  const updated = [...attendees];
+  updated[waitlistIdx] = { ...updated[waitlistIdx], status: "confirmed", promotedAt: Date.now() };
+  await ref.update({ attendees: updated });
+}
+
 // ── LOCATION AUTOCOMPLETE ──
-function LocationField({ value, onChange }) {
+function LocationField({ value, onChange, initialPlaceId }) {
   const [suggestions, setSuggestions] = useState([]);
-  const [placeId, setPlaceId] = useState(null);
+  const [placeId, setPlaceId] = useState(initialPlaceId || null);
   const [showDropdown, setShowDropdown] = useState(false);
   const timeoutRef = useRef(null);
   const sessionToken = useRef(null);
@@ -282,7 +348,7 @@ function LocationField({ value, onChange }) {
         </div>
       )}
       <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>
-        {placeId ? "📍 Lugar seleccionado" : "Escribí para buscar el lugar"}
+        {(placeId || initialPlaceId) ? "📍 Lugar seleccionado" : "Escribí para buscar el lugar"}
       </div>
     </div>
   );
@@ -439,7 +505,9 @@ function ShareView({ eventId, adminKey, onViewEvent }) {
 function EventView({ eventId, adminKey }) {
   const [event, setEvent] = useState(null);
   const [attendees, setAttendees] = useState([]);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => {
+    try { return localStorage.getItem('padel_last_name') || ""; } catch(e) { return ""; }
+  });
   const [myName, setMyName] = useState(() => {
     try { return localStorage.getItem(`padel_name_${eventId}`) || null; } catch(e) { return null; }
   });
@@ -510,21 +578,37 @@ function EventView({ eventId, adminKey }) {
     window.open(url, "_blank");
   }
 
-  async function respond(status) {
+  async function respond(status, btnEl) {
     if (!name.trim() || confirming) return;
     setConfirming(true);
     try {
-      await addAttendee(eventId, { name: name.trim(), isOrganizer: false, status, at: Date.now() });
+      const trimmedName = name.trim();
+      // Check waitlist
+      const currentConfirmed = attendees.filter(a => a.status === "confirmed");
+      const goesToWaitlist = status === "confirmed" && !isAdmin && currentConfirmed.length >= MAX_PLAYERS;
+      const actualStatus = goesToWaitlist ? "waitlist" : status;
+      
+      await addAttendee(eventId, { name: trimmedName, isOrganizer: false, status: actualStatus, at: Date.now() });
+      
       if (isAdmin) {
         setName("");
       } else {
-        setMyName(name.trim());
-        setMyResponse(status);
+        setMyName(trimmedName);
+        setMyResponse(actualStatus);
         try {
-          localStorage.setItem(`padel_name_${eventId}`, name.trim());
-          localStorage.setItem(`padel_response_${eventId}`, status);
+          localStorage.setItem(`padel_name_${eventId}`, trimmedName);
+          localStorage.setItem(`padel_response_${eventId}`, actualStatus);
+          localStorage.setItem('padel_last_name', trimmedName);
           if (event) saveEventAsGuest(eventId, event.title, event.date);
         } catch(e) {}
+        // Confetti + bounce only if confirmed
+        if (actualStatus === "confirmed" && btnEl) {
+          btnEl.classList.remove('bounce');
+          void btnEl.offsetWidth;
+          btnEl.classList.add('bounce');
+          setTimeout(() => btnEl.classList.remove('bounce'), 500);
+          launchConfetti();
+        }
       }
     } catch(e) { console.error(e); }
     setConfirming(false);
@@ -536,13 +620,17 @@ function EventView({ eventId, adminKey }) {
       const db = getDb();
       const snap = await db.collection("events").doc(eventId).get();
       const current = snap.data().attendees || [];
-      // Remove old response from this user and add new one
+      const currentConfirmed = current.filter(a => a.status === "confirmed");
+      // If trying to go to confirmed but full → waitlist
+      const actualStatus = (newStatus === "confirmed" && currentConfirmed.length >= MAX_PLAYERS) ? "waitlist" : newStatus;
       const filtered = current.filter(a => a.name !== myName || a.isOrganizer);
-      const updated = [...filtered, { name: myName, isOrganizer: false, status: newStatus, at: Date.now() }];
+      const updated = [...filtered, { name: myName, isOrganizer: false, status: actualStatus, at: Date.now() }];
       await db.collection("events").doc(eventId).update({ attendees: updated });
-      setMyResponse(newStatus);
+      // If someone freed a spot, promote from waitlist
+      if (newStatus === "declined") await promoteFromWaitlist(eventId);
+      setMyResponse(actualStatus);
       try {
-        localStorage.setItem(`padel_response_${eventId}`, newStatus);
+        localStorage.setItem(`padel_response_${eventId}`, actualStatus);
       } catch(e) {}
     } catch(e) { console.error(e); }
     setChangingResponse(false);
@@ -550,8 +638,10 @@ function EventView({ eventId, adminKey }) {
 
   async function removeAttendee(idx) {
     const db = getDb();
+    const removedStatus = attendees[idx]?.status;
     const updated = attendees.filter((_, i) => i !== idx);
     await db.collection("events").doc(eventId).update({ attendees: updated });
+    if (removedStatus === "confirmed") await promoteFromWaitlist(eventId);
   }
 
   async function saveEdit() {
@@ -578,6 +668,7 @@ function EventView({ eventId, adminKey }) {
   const isAdmin = !!(adminKey && event && event.adminKey === adminKey);
   const confirmed = attendees.filter(a => a.status === "confirmed");
   const declined = attendees.filter(a => a.status === "declined");
+  const waitlist = attendees.filter(a => a.status === "waitlist");
   const full = confirmed.length >= MAX_PLAYERS;
 
 
@@ -613,7 +704,7 @@ function EventView({ eventId, adminKey }) {
         </div>
         <div className="slots-grid">
           {Array.from({ length: MAX_PLAYERS }, (_, i) => confirmed[i] || null).map((player, i) => (
-            <div className={`slot ${player ? "filled" : ""}`} key={i}>
+            <div className={`slot ${player ? "just-filled" : "empty-pulse"}`} key={i}>
               <div className="slot-number">{i + 1}</div>
               {player ? (
                 <div>
@@ -626,6 +717,12 @@ function EventView({ eventId, adminKey }) {
             </div>
           ))}
         </div>
+        {waitlist.length > 0 && (
+          <div className="waitlist-list">
+            <div className="waitlist-title">⏳ LISTA DE ESPERA</div>
+            {waitlist.map((p, i) => <div className="waitlist-item" key={i}>⏳ {p.name}</div>)}
+          </div>
+        )}
         {declined.length > 0 && (
           <div className="declined-list">
             <div className="declined-title">NO PUEDEN</div>
@@ -636,7 +733,17 @@ function EventView({ eventId, adminKey }) {
       </div>
       {!event.cancelled && <div className="rsvp-section">
         <div className="rsvp-title">¿ESTÁS PARA JUGAR?</div>
-        {!isAdmin && myResponse === "confirmed" ? (
+        {!isAdmin && myResponse === "waitlist" ? (
+          <div className="declined-msg" style={{borderColor:"rgba(255,170,0,0.3)",background:"rgba(255,170,0,0.06)"}}>
+            <div className="emoji">⏳</div>
+            <strong style={{color:"#ffaa00"}}>Estás en lista de espera, {myName}.</strong>
+            <p style={{marginBottom:12}}>Si alguien cancela, tu lugar se confirma automáticamente.</p>
+            <button className="btn-decline" onClick={() => changeResponse("declined")} disabled={changingResponse}
+              style={{width:"100%",marginTop:8}}>
+              {changingResponse ? "..." : "Salir de la lista de espera"}
+            </button>
+          </div>
+        ) : !isAdmin && myResponse === "confirmed" ? (
           <div className="confirmed-msg">
             <div className="emoji">✅</div>
             <strong>¡Confirmado, {myName}!</strong>
@@ -662,15 +769,22 @@ function EventView({ eventId, adminKey }) {
         ) : (
           <div className="rsvp-input">
             {isAdmin && <div style={{fontSize:12,color:"#555",marginBottom:4}}>Como admin podés agregar jugadores manualmente</div>}
-            {full && !isAdmin ? <div className="rsvp-full-banner">🔒 El partido está completo</div> : !full && <div className="rsvp-sub">Quedan {MAX_PLAYERS - confirmed.length} lugar{MAX_PLAYERS - confirmed.length !== 1 ? "es" : ""}</div>}
+            {!full && <div className="rsvp-sub">Quedan {MAX_PLAYERS - confirmed.length} lugar{MAX_PLAYERS - confirmed.length !== 1 ? "es" : ""}</div>}
+            {full && !isAdmin && <div className="rsvp-sub">El partido está completo — podés anotarte en lista de espera</div>}
             <input className="field" placeholder="Nombre del jugador" value={name} onChange={e => setName(e.target.value)} />
             <div className="rsvp-buttons">
               {(!full || isAdmin) && (
-                <button className="btn-confirm" onClick={() => respond("confirmed")} disabled={!name.trim() || confirming}>
+                <button className="btn-confirm" onClick={e => respond("confirmed", e.currentTarget)} disabled={!name.trim() || confirming}>
                   {confirming ? "..." : "✅ VOY"}
                 </button>
               )}
-              <button className="btn-decline" onClick={() => respond("declined")} disabled={!name.trim() || confirming}>
+              {full && !isAdmin && (
+                <button className="btn-confirm" onClick={e => respond("confirmed", e.currentTarget)} disabled={!name.trim() || confirming}
+                  style={{opacity: name.trim() ? 1 : 0.4}}>
+                  {confirming ? "..." : "⏳ LISTA DE ESPERA"}
+                </button>
+              )}
+              <button className="btn-decline" onClick={e => respond("declined", e.currentTarget)} disabled={!name.trim() || confirming}>
                 {confirming ? "..." : "❌ NO PUEDO"}
               </button>
             </div>
@@ -699,6 +813,7 @@ function EventView({ eventId, adminKey }) {
               <div style={{marginBottom:8}}>
                 <LocationField
                   value={editForm.location}
+                  initialPlaceId={editForm.placeId}
                   onChange={(loc, pid) => setEditForm(f => ({ ...f, location: loc, placeId: pid || f.placeId }))}
                 />
               </div>
@@ -733,19 +848,35 @@ function EventView({ eventId, adminKey }) {
             <div className="admin-player" key={i}>
               <div>
                 <div className="admin-player-name">{p.name} {p.isOrganizer ? "👑" : ""}</div>
-                <div className="admin-player-status">{p.status === "confirmed" ? "✅ Confirmado" : "❌ No puede"}</div>
+                <div className="admin-player-status">{p.status === "confirmed" ? "✅ Confirmado" : p.status === "waitlist" ? "⏳ Lista de espera" : "❌ No puede"}</div>
+                {p.at && <div className="admin-player-time">{formatTime(p.at)}</div>}
               </div>
-              <div style={{display:"flex",gap:6}}>
-                <button className="btn-remove" style={{color: p.status === "confirmed" ? "#ff6060" : "#00c864", borderColor: p.status === "confirmed" ? "#333" : "#333"}}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {i > 0 && <button className="btn-remove" style={{color:"#aaa",borderColor:"#333"}}
+                  onClick={async () => {
+                    const db = getDb();
+                    const updated = [...attendees];
+                    [updated[i-1], updated[i]] = [updated[i], updated[i-1]];
+                    await db.collection("events").doc(eventId).update({ attendees: updated });
+                  }}>↑</button>}
+                {i < attendees.length-1 && <button className="btn-remove" style={{color:"#aaa",borderColor:"#333"}}
+                  onClick={async () => {
+                    const db = getDb();
+                    const updated = [...attendees];
+                    [updated[i], updated[i+1]] = [updated[i+1], updated[i]];
+                    await db.collection("events").doc(eventId).update({ attendees: updated });
+                  }}>↓</button>}
+                <button className="btn-remove" style={{color: p.status === "confirmed" ? "#ff6060" : "#00c864"}}
                   onClick={async () => {
                     const db = getDb();
                     const updated = [...attendees];
                     updated[i] = { ...updated[i], status: p.status === "confirmed" ? "declined" : "confirmed" };
                     await db.collection("events").doc(eventId).update({ attendees: updated });
+                    if (p.status === "confirmed") await promoteFromWaitlist(eventId);
                   }}>
-                  {p.status === "confirmed" ? "→ No puedo" : "→ Voy"}
+                  {p.status === "confirmed" ? "→ No puedo" : p.status === "waitlist" ? "→ Confirmar" : "→ Voy"}
                 </button>
-                <button className="btn-remove" onClick={() => removeAttendee(i)}>Eliminar</button>
+                <button className="btn-remove" onClick={() => removeAttendee(i)}>✕</button>
               </div>
             </div>
           ))}
@@ -770,7 +901,7 @@ function MyEventsView({ onSelect, onNew }) {
     const active = saved.filter(e => {
       if (!e.date) return true;
       const eventDate = new Date(e.date + "T23:59:59");
-      return eventDate >= today && !e.cancelled;
+      return eventDate >= today;
     });
     setEvents(active);
 
@@ -781,7 +912,9 @@ function MyEventsView({ onSelect, onNew }) {
         if (snap.exists) {
           const data = snap.data();
           const confirmed = (data.attendees || []).filter(a => a.status === "confirmed").length;
-          setEventData(prev => ({ ...prev, [ev.id]: { confirmed, cancelled: data.cancelled } }));
+          setEventData(prev => ({ ...prev, [ev.id]: { confirmed, cancelled: !!data.cancelled } }));
+        } else {
+          setEventData(prev => ({ ...prev, [ev.id]: { cancelled: true } }));
         }
       }).catch(() => {});
     });
@@ -800,6 +933,7 @@ function MyEventsView({ onSelect, onNew }) {
   function EventCard({ ev }) {
     const data = eventData[ev.id] || {};
     if (data.cancelled) return null;
+    const pct = data.confirmed !== undefined ? Math.round((data.confirmed / 4) * 100) : 0;
     return (
       <div className="event-card" onClick={() => onSelect(ev.id, ev.adminKey)}>
         <div className="event-card-title">{ev.title || "Partido de Pádel"}</div>
@@ -812,11 +946,17 @@ function MyEventsView({ onSelect, onNew }) {
             try {
               const resp = localStorage.getItem(`padel_response_${ev.id}`);
               if (resp === "confirmed") return <span style={{color:"#00c864"}}>✅ Voy</span>;
+              if (resp === "waitlist") return <span style={{color:"#ffaa00"}}>⏳ En espera</span>;
               if (resp === "declined") return <span style={{color:"#ff6060"}}>❌ No puedo</span>;
             } catch(e) {}
             return null;
           })()}
         </div>
+        {data.confirmed !== undefined && (
+          <div className="progress-bar-wrap">
+            <div className="progress-bar-fill" style={{width: pct + '%'}} />
+          </div>
+        )}
       </div>
     );
   }
