@@ -397,7 +397,7 @@ function CreatorView({ onCreate }) {
       const adminKey = Math.random().toString(36).slice(2, 10);
       data.adminKey = adminKey;
       await saveEvent(id, data);
-      saveEventToHistory(id, adminKey, data.title, data.date);
+      saveEventToHistory(id, adminKey, data.title, data.date, data.timeStart);
       onCreate(id, adminKey);
     } catch(e) {
       console.error(e);
@@ -586,7 +586,7 @@ function EventView({ eventId, adminKey, onBack }) {
         if (adminKey && data.adminKey === adminKey) {
           saveEventToHistory(eventId, adminKey, data.title, data.date);
         } else {
-          saveEventAsGuest(eventId, data.title, data.date);
+          saveEventAsGuest(eventId, data.title, data.date, data.timeStart);
         }
       }
       setLoading(false);
@@ -625,7 +625,7 @@ function EventView({ eventId, adminKey, onBack }) {
           localStorage.setItem(`padel_name_${eventId}`, trimmedName);
           localStorage.setItem(`padel_response_${eventId}`, actualStatus);
           localStorage.setItem('padel_last_name', trimmedName);
-          if (event) saveEventAsGuest(eventId, event.title, event.date);
+          if (event) saveEventAsGuest(eventId, event.title, event.date, event.timeStart);
         } catch(e) {}
         // Confetti + bounce only if confirmed
         if (actualStatus === "confirmed" && btnEl) {
@@ -950,8 +950,9 @@ function MyEventsView({ onSelect, onNew }) {
     today.setHours(0,0,0,0);
     const active = saved.filter(e => {
       if (!e.date) return true;
-      const eventDate = new Date(e.date + "T23:59:59");
-      return eventDate >= today;
+      const timeStart = e.timeStart || "23:59";
+      const eventDate = new Date(e.date + "T" + timeStart + ":00");
+      return eventDate >= new Date();
     });
     setEvents(active);
 
@@ -1086,7 +1087,8 @@ export default function App() {
     const today = new Date(); today.setHours(0,0,0,0);
     const active = saved.filter(e => {
       if (!e.date) return true;
-      return new Date(e.date + "T23:59:59") >= today;
+      const timeStart = e.timeStart || "23:59";
+      return new Date(e.date + "T" + timeStart + ":00") >= new Date();
     });
     if (active.length > 0) return "myevents";
     return "creator";
