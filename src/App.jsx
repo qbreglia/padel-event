@@ -398,7 +398,7 @@ function ShareView({ eventId, adminKey, onViewEvent }) {
   const [copied, setCopied] = useState(false);
   const base = `${window.location.origin}`;
   const link = `${base}/?event=${eventId}`;
-  const shareLink = `https://partido-de-padel.netlify.app/.netlify/functions/preview?event=${eventId}`;
+  const shareLink = `https://padel-event-green.vercel.app/api/preview?event=${eventId}`;
   const adminLink = `${base}/?event=${eventId}&admin=${adminKey}`;
 
   function copy() {
@@ -751,7 +751,7 @@ function EventView({ eventId, adminKey }) {
           }}>✅ REACTIVAR PARTIDO</button>}
           <button className="btn-whatsapp" style={{marginBottom:16,fontSize:18,padding:"14px",marginTop:10}} onClick={() => {
             const base = window.location.origin + window.location.pathname;
-            const inviteLink = "https://partido-de-padel.netlify.app/.netlify/functions/preview?event=" + eventId;
+            const inviteLink = "https://padel-event-green.vercel.app/api/preview?event=" + eventId;
             const msg = encodeURIComponent(inviteLink);
             window.open("https://wa.me/?text=" + msg, "_blank");
           }}>
