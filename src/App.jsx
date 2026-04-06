@@ -422,7 +422,16 @@ function CreatorView({ onCreate }) {
       <div className="section">
         <div className="section-label">Horario</div>
         <div className="row">
-          <input className="field" type="time" value={form.timeStart} onChange={e => set("timeStart", e.target.value)} />
+          <input className="field" type="time" value={form.timeStart} onChange={e => {
+          set("timeStart", e.target.value);
+          if (e.target.value) {
+            const [h, m] = e.target.value.split(":").map(Number);
+            const total = h * 60 + m + 90;
+            const endH = Math.floor(total / 60) % 24;
+            const endM = total % 60;
+            set("timeEnd", String(endH).padStart(2,"0") + ":" + String(endM).padStart(2,"0"));
+          }
+        }} />
           <input className="field" type="time" value={form.timeEnd} onChange={e => set("timeEnd", e.target.value)} />
         </div>
       </div>
