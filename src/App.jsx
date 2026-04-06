@@ -1097,15 +1097,7 @@ export default function App() {
   const [screen, setScreen] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("event")) return "event";
-    const saved = getSavedEvents();
-    const today = new Date(); today.setHours(0,0,0,0);
-    const active = saved.filter(e => {
-      if (!e.date) return true;
-      const timeStart = e.timeStart || "23:59";
-      return new Date(e.date + "T" + timeStart + ":00") >= new Date();
-    });
-    if (active.length > 0) return "myevents";
-    return "creator";
+    return "myevents";
   });
   const [currentEventId, setCurrentEventId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
