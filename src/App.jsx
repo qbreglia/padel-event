@@ -19,6 +19,9 @@ const styles = `
   .field::placeholder { color: #444; }
   textarea.field { resize: vertical; min-height: 80px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field-icon-wrap { position: relative; }
+  .field-icon-wrap .field { padding-right: 40px; }
+  .field-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 18px; pointer-events: none; }
   .location-wrapper { position: relative; }
   .autocomplete-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; margin-top: 4px; z-index: 100; overflow: hidden; }
   .autocomplete-item { padding: 12px 16px; cursor: pointer; font-size: 14px; color: #ccc; border-bottom: 1px solid #222; transition: background 0.15s; }
@@ -417,22 +420,31 @@ function CreatorView({ onCreate }) {
       </div>
       <div className="section">
         <div className="section-label">Fecha</div>
-        <input className="field" type="date" value={form.date} onChange={e => set("date", e.target.value)} />
+        <div className="field-icon-wrap">
+          <input className="field" type="date" value={form.date} onChange={e => set("date", e.target.value)} />
+          <span className="field-icon">📅</span>
+        </div>
       </div>
       <div className="section">
         <div className="section-label">Horario</div>
         <div className="row">
-          <input className="field" type="time" value={form.timeStart} onChange={e => {
-          set("timeStart", e.target.value);
-          if (e.target.value) {
-            const [h, m] = e.target.value.split(":").map(Number);
-            const total = h * 60 + m + 90;
-            const endH = Math.floor(total / 60) % 24;
-            const endM = total % 60;
-            set("timeEnd", String(endH).padStart(2,"0") + ":" + String(endM).padStart(2,"0"));
-          }
-        }} />
-          <input className="field" type="time" value={form.timeEnd} onChange={e => set("timeEnd", e.target.value)} />
+          <div className="field-icon-wrap">
+            <input className="field" type="time" value={form.timeStart} onChange={e => {
+              set("timeStart", e.target.value);
+              if (e.target.value) {
+                const [h, m] = e.target.value.split(":").map(Number);
+                const total = h * 60 + m + 90;
+                const endH = Math.floor(total / 60) % 24;
+                const endM = total % 60;
+                set("timeEnd", String(endH).padStart(2,"0") + ":" + String(endM).padStart(2,"0"));
+              }
+            }} />
+            <span className="field-icon">🕐</span>
+          </div>
+          <div className="field-icon-wrap">
+            <input className="field" type="time" value={form.timeEnd} onChange={e => set("timeEnd", e.target.value)} />
+            <span className="field-icon">🕑</span>
+          </div>
         </div>
       </div>
       <div className="section">
@@ -814,7 +826,10 @@ function EventView({ eventId, adminKey }) {
           {editMode && (
             <div style={{marginBottom:16}}>
               <input className="edit-field" placeholder="Título" value={editForm.title} onChange={e => setEditForm(f=>({...f,title:e.target.value}))} />
-              <input className="edit-field" type="date" value={editForm.date} onChange={e => setEditForm(f=>({...f,date:e.target.value}))} />
+              <div className="field-icon-wrap">
+                <input className="edit-field field" type="date" value={editForm.date} onChange={e => setEditForm(f=>({...f,date:e.target.value}))} />
+                <span className="field-icon">📅</span>
+              </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                 <input className="edit-field" type="time" value={editForm.timeStart} onChange={e => {
                   const val = e.target.value;
