@@ -816,7 +816,20 @@ function EventView({ eventId, adminKey }) {
               <input className="edit-field" placeholder="Título" value={editForm.title} onChange={e => setEditForm(f=>({...f,title:e.target.value}))} />
               <input className="edit-field" type="date" value={editForm.date} onChange={e => setEditForm(f=>({...f,date:e.target.value}))} />
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                <input className="edit-field" type="time" value={editForm.timeStart} onChange={e => setEditForm(f=>({...f,timeStart:e.target.value}))} style={{marginBottom:0}} />
+                <input className="edit-field" type="time" value={editForm.timeStart} onChange={e => {
+                  const val = e.target.value;
+                  setEditForm(f => {
+                    const updated = {...f, timeStart: val};
+                    if (val) {
+                      const [h, m] = val.split(":").map(Number);
+                      const total = h * 60 + m + 90;
+                      const endH = Math.floor(total / 60) % 24;
+                      const endM = total % 60;
+                      updated.timeEnd = String(endH).padStart(2,"0") + ":" + String(endM).padStart(2,"0");
+                    }
+                    return updated;
+                  });
+                }} style={{marginBottom:0}} />
                 <input className="edit-field" type="time" value={editForm.timeEnd} onChange={e => setEditForm(f=>({...f,timeEnd:e.target.value}))} style={{marginBottom:0}} />
               </div>
               <div style={{marginBottom:8}}>
