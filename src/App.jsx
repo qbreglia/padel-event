@@ -228,23 +228,30 @@ function getSavedEvents() {
   } catch(e) { return []; }
 }
 
-function saveEventToHistory(id, adminKey, title, date) {
+function saveEventToHistory(id, adminKey, title, date, timeStart) {
   try {
     const events = getSavedEvents();
     const existing = events.findIndex(e => e.id === id);
-    const entry = { id, adminKey, title, date, createdAt: Date.now() };
+    const entry = { id, adminKey, title, date, timeStart: timeStart || "", createdAt: Date.now() };
     if (existing >= 0) events[existing] = entry;
     else events.unshift(entry);
     localStorage.setItem('padel_my_events', JSON.stringify(events.slice(0, 20)));
   } catch(e) {}
 }
 
-function saveEventAsGuest(id, title, date) {
+function saveEventAsGuest(id, title, date, timeStart) {
   try {
     const events = getSavedEvents();
     const existing = events.findIndex(e => e.id === id);
-    if (existing >= 0) return; // already saved (maybe as organizer)
-    const entry = { id, adminKey: null, title, date, isGuest: true, createdAt: Date.now() };
+    if (existing >= 0) {
+      const updated = [...events];
+      if (!updated[existing].timeStart && timeStart) {
+        updated[existing].timeStart = timeStart;
+        localStorage.setItem('padel_my_events', JSON.stringify(updated.slice(0, 20)));
+      }
+      return;
+    }
+    const entry = { id, adminKey: null, title, date, timeStart: timeStart || "", isGuest: true, createdAt: Date.now() };
     events.unshift(entry);
     localStorage.setItem('padel_my_events', JSON.stringify(events.slice(0, 20)));
   } catch(e) {}
@@ -274,12 +281,17 @@ async function promoteFromWaitlist(id) {
   if (!snap.exists) return;
   const attendees = snap.data().attendees || [];
   const confirmed = attendees.filter(a => a.status === "confirmed");
-  if (confirmed.length >= 4) return;
-  const waitlistIdx = attendees.findIndex(a => a.status === "waitlist");
-  if (waitlistIdx < 0) return;
+  const spotsAvailable = 4 - confirmed.length;
+  if (spotsAvailable <= 0) return;
   const updated = [...attendees];
-  updated[waitlistIdx] = { ...updated[waitlistIdx], status: "confirmed", promotedAt: Date.now() };
-  await ref.update({ attendees: updated });
+  let promoted = 0;
+  for (let i = 0; i < updated.length && promoted < spotsAvailable; i++) {
+    if (updated[i].status === "waitlist") {
+      updated[i] = { ...updated[i], status: "confirmed", promotedAt: Date.now() };
+      promoted++;
+    }
+  }
+  if (promoted > 0) await ref.update({ attendees: updated });
 }
 
 // ── LOCATION AUTOCOMPLETE ──
@@ -584,7 +596,7 @@ function EventView({ eventId, adminKey, onBack }) {
         setEditForm({ title: data.title, date: data.date, timeStart: data.timeStart, timeEnd: data.timeEnd, location: data.location, placeId: data.placeId || null, description: data.description || "" });
         // Save to history when opening any event
         if (adminKey && data.adminKey === adminKey) {
-          saveEventToHistory(eventId, adminKey, data.title, data.date);
+          saveEventToHistory(eventId, adminKey, data.title, data.date, data.timeStart);
         } else {
           saveEventAsGuest(eventId, data.title, data.date, data.timeStart);
         }
@@ -598,8 +610,8 @@ function EventView({ eventId, adminKey, onBack }) {
     const title = encodeURIComponent(evt.title || "Partido de Pádel");
     const location = encodeURIComponent(evt.location || "");
     const startDate = evt.date ? evt.date.replace(/-/g, "") : "";
-    const startTime = evt.timeStart ? evt.timeStart.replace(":", "") + "00" : "000000";
-    const endTime = evt.timeEnd ? evt.timeEnd.replace(":", "") + "00" : "020000";
+    const startTime = evt.timeStart ? evt.timeStart.replace(/:/g, "") + "00" : "000000";
+    const endTime = evt.timeEnd ? evt.timeEnd.replace(/:/g, "") + "00" : "020000";
     const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDate}T${startTime}/${startDate}T${endTime}&location=${location}`;
     window.open(url, "_blank");
   }
@@ -672,20 +684,25 @@ function EventView({ eventId, adminKey, onBack }) {
 
   async function saveEdit() {
     setSaving(true);
-    const db = getDb();
-    await db.collection("events").doc(eventId).update({
-      title: editForm.title,
-      date: editForm.date,
-      timeStart: editForm.timeStart,
-      timeEnd: editForm.timeEnd,
-      location: editForm.location,
-      placeId: editForm.placeId || null,
-      description: editForm.description,
-    });
+    try {
+      const db = getDb();
+      await db.collection("events").doc(eventId).update({
+        title: editForm.title,
+        date: editForm.date,
+        timeStart: editForm.timeStart,
+        timeEnd: editForm.timeEnd,
+        location: editForm.location,
+        placeId: editForm.placeId || null,
+        description: editForm.description,
+      });
+      saveEventToHistory(eventId, adminKey, editForm.title, editForm.date, editForm.timeStart);
+      setSavedMsg(true);
+      setEditMode(false);
+      setTimeout(() => setSavedMsg(false), 3000);
+    } catch(e) {
+      alert("Error al guardar: " + e.message);
+    }
     setSaving(false);
-    setSavedMsg(true);
-    setEditMode(false);
-    setTimeout(() => setSavedMsg(false), 3000);
   }
 
   if (loading) return <div className="loading">CARGANDO...</div>;
