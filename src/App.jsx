@@ -552,6 +552,7 @@ function EventView({ eventId, adminKey, onBack }) {
   const [myResponse, setMyResponse] = useState(() => {
     try { return localStorage.getItem(`padel_response_${eventId}`) || null; } catch(e) { return null; }
   });
+  const [wasPromoted, setWasPromoted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [changingResponse, setChangingResponse] = useState(false);
@@ -594,6 +595,18 @@ function EventView({ eventId, adminKey, onBack }) {
         setEvent(data);
         setAttendees(data.attendees || []);
         setEditForm({ title: data.title, date: data.date, timeStart: data.timeStart, timeEnd: data.timeEnd, location: data.location, placeId: data.placeId || null, description: data.description || "" });
+        // Check if user was promoted from waitlist
+        try {
+          const savedResponse = localStorage.getItem(`padel_response_${eventId}`);
+          const savedName = localStorage.getItem(`padel_name_${eventId}`);
+          if (savedResponse === "waitlist" && savedName) {
+            const me = (data.attendees || []).find(a => a.name === savedName && a.status === "confirmed" && a.promotedAt);
+            if (me) {
+              setWasPromoted(true);
+              localStorage.setItem(`padel_response_${eventId}`, "confirmed");
+            }
+          }
+        } catch(e) {}
         // Save to history when opening any event
         if (adminKey && data.adminKey === adminKey) {
           saveEventToHistory(eventId, adminKey, data.title, data.date, data.timeStart);
@@ -777,6 +790,13 @@ function EventView({ eventId, adminKey, onBack }) {
       </div>
       {!event.cancelled && <div className="rsvp-section">
         <div className="rsvp-title">¿ESTÁS PARA JUGAR?</div>
+        {wasPromoted && (
+          <div className="promoted-banner">
+            <div className="emoji">🎉</div>
+            <strong style={{color:"#00c864",fontSize:18,display:"block",marginBottom:6}}>¡Estás adentro!!</strong>
+            <p style={{fontSize:14,color:"#aaa"}}>Se liberó un lugar — ya estás confirmado en el partido.</p>
+          </div>
+        )}
         {!isAdmin && myResponse === "waitlist" ? (
           <div className="declined-msg" style={{borderColor:"rgba(255,170,0,0.3)",background:"rgba(255,170,0,0.06)"}}>
             <div className="emoji">⏳</div>
@@ -1016,13 +1036,14 @@ function MyEventsView({ onSelect, onNew }) {
     const data = eventData[ev.id] || {};
     if (data.cancelled) return null;
     const pct = data.confirmed !== undefined ? Math.round((data.confirmed / 4) * 100) : 0;
+    const slotColor = data.confirmed >= 4 ? "#00c864" : data.confirmed >= 2 ? "#ffaa00" : "#666";
     return (
-      <div className="event-card" onClick={() => onSelect(ev.id, ev.adminKey)}>
+      <div className="event-card slide-up" style={{animationDelay: "0s"}} onClick={() => onSelect(ev.id, ev.adminKey)}>
         <div className="event-card-title">{ev.title || "Partido de Pádel"}</div>
         <div className="event-card-meta">
-          <span>📅 {formatDateShort(ev.date)}</span>
+          <span>📅 {formatDateShort(ev.date)}{ev.timeStart ? ` · ${ev.timeStart}hs` : ""}</span>
           {data.confirmed !== undefined && (
-            <span className="event-card-slots">{data.confirmed}/4 jugadores</span>
+            <span className="event-card-slots" style={{color: slotColor}}>{data.confirmed}/4 jugadores</span>
           )}
           {ev.isGuest && (() => {
             try {
