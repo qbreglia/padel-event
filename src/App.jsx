@@ -128,10 +128,10 @@ const styles = `
   .btn-confirm.bounce { animation: btnBounce 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
   @keyframes btnBounce { 0% { transform: scale(1); } 20% { transform: scale(0.88); } 50% { transform: scale(1.15); } 70% { transform: scale(0.96); } 100% { transform: scale(1); } }
   .particle { position: fixed; pointer-events: none; z-index: 9999; border-radius: 3px; }
-  .waitlist-list { margin-top: 16px; padding-top: 16px; border-top: 1px solid #1a1a1a; }
-  .waitlist-title { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #666; margin-bottom: 10px; }
-  .waitlist-item { font-size: 14px; color: #666; padding: 6px 0; border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; gap: 8px; }
-  .waitlist-item:last-child { border-bottom: none; }
+  .pending-list { margin-top: 16px; padding-top: 16px; border-top: 1px solid #1a1a1a; }
+  .pending-title { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #666; margin-bottom: 10px; }
+  .pending-item { font-size: 14px; color: #888; padding: 6px 0; border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; gap: 8px; }
+  .pending-item:last-child { border-bottom: none; }
   .progress-bar-wrap { height: 4px; background: #222; border-radius: 2px; margin-top: 8px; overflow: hidden; }
   .progress-bar-fill { height: 100%; background: #00c864; border-radius: 2px; transition: width 0.4s ease; }
   .admin-player-time { font-size: 11px; color: #444; margin-top: 2px; }
@@ -176,7 +176,10 @@ function formatDate(dateStr) {
   if (!dateStr) return "";
   const [y, m, d] = dateStr.split("-");
   const months = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-  return `${parseInt(d)} de ${months[parseInt(m)-1]} ${y}`;
+  const days = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+  const date = new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+  const dayName = days[date.getDay()];
+  return `${dayName} ${parseInt(d)} de ${months[parseInt(m)-1]} ${y}`;
 }
 
 
@@ -273,26 +276,7 @@ async function addAttendee(id, attendee) {
   await ref.update({ attendees: [...current, attendee] });
 }
 
-async function promoteFromWaitlist(id) {
-  const db = getDb();
-  if (!db) return;
-  const ref = db.collection("events").doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) return;
-  const attendees = snap.data().attendees || [];
-  const confirmed = attendees.filter(a => a.status === "confirmed");
-  const spotsAvailable = 4 - confirmed.length;
-  if (spotsAvailable <= 0) return;
-  const updated = [...attendees];
-  let promoted = 0;
-  for (let i = 0; i < updated.length && promoted < spotsAvailable; i++) {
-    if (updated[i].status === "waitlist") {
-      updated[i] = { ...updated[i], status: "confirmed", promotedAt: Date.now() };
-      promoted++;
-    }
-  }
-  if (promoted > 0) await ref.update({ attendees: updated });
-}
+
 
 // ── LOCATION AUTOCOMPLETE ──
 function LocationField({ value, onChange, initialPlaceId }) {
@@ -599,7 +583,7 @@ function EventView({ eventId, adminKey, onBack }) {
         try {
           const savedResponse = localStorage.getItem(`padel_response_${eventId}`);
           const savedName = localStorage.getItem(`padel_name_${eventId}`);
-          if (savedResponse === "waitlist" && savedName) {
+          if (savedResponse === "pending" && savedName) {
             const me = (data.attendees || []).find(a => a.name === savedName && a.status === "confirmed" && a.promotedAt);
             if (me) {
               setWasPromoted(true);
@@ -634,10 +618,9 @@ function EventView({ eventId, adminKey, onBack }) {
     setConfirming(true);
     try {
       const trimmedName = name.trim();
-      // Check waitlist
       const currentConfirmed = attendees.filter(a => a.status === "confirmed");
-      const goesToWaitlist = status === "confirmed" && !isAdmin && currentConfirmed.length >= MAX_PLAYERS;
-      const actualStatus = goesToWaitlist ? "waitlist" : status;
+      const goesToPending = status === "confirmed" && !isAdmin && currentConfirmed.length >= MAX_PLAYERS;
+      const actualStatus = goesToPending ? "pending" : status;
       
       await addAttendee(eventId, { name: trimmedName, isOrganizer: false, status: actualStatus, at: Date.now() });
       
@@ -653,7 +636,7 @@ function EventView({ eventId, adminKey, onBack }) {
           if (event) saveEventAsGuest(eventId, event.title, event.date, event.timeStart);
         } catch(e) {}
         // Confetti + bounce only if confirmed
-        if (actualStatus === "confirmed" && btnEl) {
+        if (actualStatus === "confirmed" && !goesToPending && btnEl) {
           btnEl.classList.remove('bounce');
           void btnEl.offsetWidth;
           btnEl.classList.add('bounce');
@@ -672,13 +655,12 @@ function EventView({ eventId, adminKey, onBack }) {
       const snap = await db.collection("events").doc(eventId).get();
       const current = snap.data().attendees || [];
       const currentConfirmed = current.filter(a => a.status === "confirmed");
-      // If trying to go to confirmed but full → waitlist
-      const actualStatus = (newStatus === "confirmed" && currentConfirmed.length >= MAX_PLAYERS) ? "waitlist" : newStatus;
+      // If trying to go to confirmed but full → stay pending
+      const actualStatus = (newStatus === "confirmed" && currentConfirmed.length >= MAX_PLAYERS) ? "pending" : newStatus;
       const filtered = current.filter(a => a.name !== myName || a.isOrganizer);
       const updated = [...filtered, { name: myName, isOrganizer: false, status: actualStatus, at: Date.now() }];
       await db.collection("events").doc(eventId).update({ attendees: updated });
       // If someone freed a spot, promote from waitlist
-      if (newStatus === "declined") await promoteFromWaitlist(eventId);
       setMyResponse(actualStatus);
       try {
         localStorage.setItem(`padel_response_${eventId}`, actualStatus);
@@ -692,7 +674,6 @@ function EventView({ eventId, adminKey, onBack }) {
     const removedStatus = attendees[idx]?.status;
     const updated = attendees.filter((_, i) => i !== idx);
     await db.collection("events").doc(eventId).update({ attendees: updated });
-    if (removedStatus === "confirmed") await promoteFromWaitlist(eventId);
   }
 
   async function saveEdit() {
@@ -724,7 +705,7 @@ function EventView({ eventId, adminKey, onBack }) {
   const isAdmin = !!(adminKey && event && event.adminKey === adminKey);
   const confirmed = attendees.filter(a => a.status === "confirmed");
   const declined = attendees.filter(a => a.status === "declined");
-  const waitlist = attendees.filter(a => a.status === "waitlist");
+  const pending = attendees.filter(a => a.status === "pending");
   const full = confirmed.length >= MAX_PLAYERS;
 
 
@@ -774,10 +755,10 @@ function EventView({ eventId, adminKey, onBack }) {
             </div>
           ))}
         </div>
-        {waitlist.length > 0 && (
-          <div className="waitlist-list">
-            <div className="waitlist-title">⏳ LISTA DE ESPERA</div>
-            {waitlist.map((p, i) => <div className="waitlist-item" key={i}>⏳ {p.name}</div>)}
+        {pending.length > 0 && (
+          <div className="pending-list">
+            <div className="pending-title">🤔 A CONFIRMAR</div>
+            {pending.map((p, i) => <div className="pending-item" key={i}>🤔 {p.name}</div>)}
           </div>
         )}
         {declined.length > 0 && (
@@ -797,14 +778,20 @@ function EventView({ eventId, adminKey, onBack }) {
             <p style={{fontSize:14,color:"#aaa"}}>Se liberó un lugar — ya estás confirmado en el partido.</p>
           </div>
         )}
-        {!isAdmin && myResponse === "waitlist" ? (
+        {!isAdmin && myResponse === "pending" ? (
           <div className="declined-msg" style={{borderColor:"rgba(255,170,0,0.3)",background:"rgba(255,170,0,0.06)"}}>
-            <div className="emoji">⏳</div>
-            <strong style={{color:"#ffaa00"}}>Estás en lista de espera, {myName}.</strong>
-            <p style={{marginBottom:12}}>Si alguien cancela, tu lugar se confirma automáticamente.</p>
+            <div className="emoji">🤔</div>
+            <strong style={{color:"#ffaa00"}}>Todavía no confirmaste, {myName}.</strong>
+            <p style={{marginBottom:12}}>{full ? "El partido está completo. Si se libera un lugar podés confirmar." : "Hay lugares disponibles, ¿podés venir?"}</p>
+            {!full && (
+              <button className="btn-confirm" onClick={() => changeResponse("confirmed")} disabled={changingResponse}
+                style={{width:"100%",marginTop:8}}>
+                {changingResponse ? "..." : "✅ Confirmar que voy"}
+              </button>
+            )}
             <button className="btn-decline" onClick={() => changeResponse("declined")} disabled={changingResponse}
               style={{width:"100%",marginTop:8}}>
-              {changingResponse ? "..." : "Salir de la lista de espera"}
+              {changingResponse ? "..." : "❌ No puedo ir"}
             </button>
           </div>
         ) : !isAdmin && myResponse === "confirmed" ? (
@@ -848,7 +835,7 @@ function EventView({ eventId, adminKey, onBack }) {
           <div className="rsvp-input">
             {isAdmin && <div style={{fontSize:12,color:"#555",marginBottom:4}}>Como admin podés agregar jugadores manualmente</div>}
             {!full && <div className="rsvp-sub">Quedan {MAX_PLAYERS - confirmed.length} lugar{MAX_PLAYERS - confirmed.length !== 1 ? "es" : ""}</div>}
-            {full && !isAdmin && <div className="rsvp-sub">El partido está completo — podés anotarte en lista de espera</div>}
+            {full && !isAdmin && <div className="rsvp-sub">El partido está completo — podés anotarte para confirmar después</div>}
             <input className="field" placeholder="Nombre del jugador" value={name} onChange={e => setName(e.target.value)} />
             <div className="rsvp-buttons">
               {(!full || isAdmin) && (
@@ -857,15 +844,21 @@ function EventView({ eventId, adminKey, onBack }) {
                 </button>
               )}
               {full && !isAdmin && (
-                <button className="btn-confirm" onClick={e => respond("confirmed", e.currentTarget)} disabled={!name.trim() || confirming}
-                  style={{opacity: name.trim() ? 1 : 0.4}}>
-                  {confirming ? "..." : "⏳ LISTA DE ESPERA"}
+                <button className="btn-confirm" onClick={e => respond("pending", e.currentTarget)} disabled={!name.trim() || confirming}
+                  style={{background:"transparent", border:"1px solid #ffaa00", color:"#ffaa00"}}>
+                  {confirming ? "..." : "🤔 A CONFIRMAR"}
                 </button>
               )}
               <button className="btn-decline" onClick={e => respond("declined", e.currentTarget)} disabled={!name.trim() || confirming}>
                 {confirming ? "..." : "❌ NO PUEDO"}
               </button>
             </div>
+            {!full && !isAdmin && (
+              <button className="btn-decline" onClick={e => respond("pending", e.currentTarget)} disabled={!name.trim() || confirming}
+                style={{marginTop:4, borderColor:"#555", color:"#888", fontSize:16}}>
+                {confirming ? "..." : "🤔 A CONFIRMAR DESPUÉS"}
+              </button>
+            )}
           </div>
         )}
       </div>}
@@ -942,7 +935,7 @@ function EventView({ eventId, adminKey, onBack }) {
             <div className="admin-player" key={i}>
               <div>
                 <div className="admin-player-name">{p.name} {p.isOrganizer ? "👑" : ""}</div>
-                <div className="admin-player-status">{p.status === "confirmed" ? "✅ Confirmado" : p.status === "waitlist" ? "⏳ Lista de espera" : "❌ No puede"}</div>
+                <div className="admin-player-status">{p.status === "confirmed" ? "✅ Confirmado" : p.status === "pending" ? "🤔 A confirmar" : "❌ No puede"}</div>
                 {p.at && <div className="admin-player-time">{formatTime(p.at)}</div>}
               </div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -970,12 +963,12 @@ function EventView({ eventId, adminKey, onBack }) {
                       await promoteFromWaitlist(eventId);
                     } else {
                       const currentConfirmed = attendees.filter(a => a.status === "confirmed").length;
-                      const newStatus = (p.status === "waitlist" && currentConfirmed >= MAX_PLAYERS) ? "waitlist" : "confirmed";
+                      const newStatus = (p.status === "pending" && currentConfirmed >= MAX_PLAYERS) ? "pending" : "confirmed";
                       updated[i] = { ...updated[i], status: newStatus };
                       await db.collection("events").doc(eventId).update({ attendees: updated });
                     }
                   }}>
-                  {p.status === "confirmed" ? "→ No puedo" : p.status === "waitlist" ? "→ Confirmar" : "→ Voy"}
+                  {p.status === "confirmed" ? "→ No puedo" : p.status === "pending" ? "→ Confirmar" : "→ Voy"}
                 </button>
                 <button className="btn-remove" onClick={() => removeAttendee(i)}>✕</button>
               </div>
@@ -1049,7 +1042,7 @@ function MyEventsView({ onSelect, onNew }) {
             try {
               const resp = localStorage.getItem(`padel_response_${ev.id}`);
               if (resp === "confirmed") return <span style={{color:"#00c864"}}>✅ Voy</span>;
-              if (resp === "waitlist") return <span style={{color:"#ffaa00"}}>⏳ En espera</span>;
+              if (resp === "pending") return <span style={{color:"#ffaa00"}}>🤔 A confirmar</span>;
               if (resp === "declined") return <span style={{color:"#ff6060"}}>❌ No puedo</span>;
             } catch(e) {}
             return null;
